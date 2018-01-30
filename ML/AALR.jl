@@ -5,6 +5,7 @@
 
 using DataFrames;
 using CSV;
+println("Leeeerooooy Jenkins")
 
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #All on monthly data
