@@ -1,8 +1,8 @@
-#Pkg.add("DataFrames") dataframes like in R to keep track of datafiles
-#Pkg.add("CSV") Importing csv files
-#Pkg.add("JuMP") JuMP package for writing models
-#Pkg.add("Clp") Clp for a solver
-
+Pkg.add("DataFrames") # dataframes like in R to keep track of datafiles
+Pkg.add("CSV") #Importing csv files
+Pkg.add("JuMP") #JuMP package for writing models
+Pkg.add("CPLEX") #Clp for a solver
+Pkg.add("StatsBase")
 using DataFrames;
 using CSV;
 println("Leeeeroooy Jenkins")
@@ -98,7 +98,7 @@ standCombDataCopy = copy(standCombinedData[1:(nRows-1),1:nCols])
 z = 0
 stage2Model = Model(solver = CplexSolver())
 bigM = 100
-gamma = 0.01
+gamma = 1000
 @variable(stage2Model, 0 <= z[1:nCols] <= 1, Bin )
 @variable(stage2Model, b[1:nCols])
 @variable(stage2Model, T)
