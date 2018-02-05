@@ -6,37 +6,46 @@ using CSV;
 
 println("Leeeeroooy Jenkins")
 
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#Esben's path
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+
+#Skipper's path
+cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
+
 #All on monthly data
-mainData = CSV.read("AmesHousingModClean.csv"; delim = ';')
+mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)
 #mainData = CSV.read("AmesHousingMod.csv")
 
 dataSize = size(mainData)
-nColsMain = dataSize[2]
 nRowsMain = dataSize[1]
+nColsMain = dataSize[2]
 colNames = names(mainData)
 
-nColsMain = size(mainData)[2]
 #Converting it into a datamatrix instead of a dataframe
-mainData2 = Array(mainData[2:nRowsMain, 1:nColsMain])
-#stringMatrix = Array(mainData[2:nRowsMain,1:(nColsMain)])
-#dataMatrixMain = parse.(Float64, stringMatrix)
+mainDataMatrix = Array(mainData)
 
 using JuMP
 using CPLEX
 
-combinedData = copy(mainData2)
-nCols = size(combinedData)[2]
+combinedData = copy(mainDataMatrix)
 nRows = size(combinedData)[1]
+nCols = size(combinedData)[2]
 
+### STAGE 1 ###
+println("STAGE 1 INITIATED")
+#Define solve
 m = Model(solver = CplexSolver())
+
+#Add binary variables variables
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
-
+#Calculate highly correlated matix
 HC = cor(combinedData)
 
+#Define objective function
 @objective(m, Max, sum(z[i] for i=1:length(z)))
 
+#Define max correlation and constraints
 rho = 0.8
 for i=1:length(z)
 	for j=1:length(z)
@@ -47,14 +56,18 @@ for i=1:length(z)
 		end
 	end
 end
-#@constraint(m, z[2] + z[3] <= 1)
 
+#Print model
 print(m)
 
+#Get solution status
 status = solve(m)
 
+#Get objective value
 println("Objective value: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
+
+#Get solution value
 zSolved = getvalue(z)
 length(zSolved)
 for i=1:length(zSolved)
@@ -63,36 +76,65 @@ for i=1:length(zSolved)
 	end
 end
 println("STAGE 1 DONE")
+
+### STAGE 2 ###
 println("STAGE 2 INITIATED")
+println("Standardizing data")
 using StatsBase
 
+#Standardize data by coulmn
 y = combinedData[1:250,nColsMain]
 X = combinedData[1:250,1:nColsMain-1]
+
+"""
+Function that returns the zscore column zscore for each column in the Matrix.
+Must have at least two columns
+"""
+function zScoreByColumn(X::AbstractArray{T}) where {T<:Real}
+	standX = Array{Float64}(X)
+	for i=1:size(X)[2]
+		temp = zscore(X[:,i])
+		if any(isnan(temp))
+			println("$i ERROR ERROR")
+		else
+			standX[:,i] = copy(zscore(X[:,i]))
+		end
+	end
+	return standX
+end
+
+standX = zScoreByColumn(X)
 standY = zscore(y)
-standX = zscore(X)
 
+println("Setup model")
+#Define parameters and model
 bCols = size(X)[2]
-
 z = 0
 b = 0
 stage2Model = Model(solver = CplexSolver())
-bigM = 10000
+bigM = 10
 gamma = 10
-@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+
+#Define variables
 @variable(stage2Model, b[1:bCols])
 @variable(stage2Model, T)
 #@variable(stage2Model, O)
 
-
+#Define objective function (5a)
 @objective(stage2Model, Min, T)
 @constraint(stage2Model, norm(standY - standX*b) <= T)
 
+#Define binary variable (5b)
+@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+
+#Define constraints (5c)
 for i=1:bCols
 	@constraint(stage2Model, -bigM*z[i] <= b[i])
 	@constraint(stage2Model, b[i] <= bigM*z[i])
 end
 
-@constraint(stage2Model, sum(z[i] for i=1:bCols) <= kmax)
+#Define kmax constraint (5d)
+@constraint(stage2Model, kMaxConstr, sum(z[i] for i=1:bCols) <= kmax)
 
 #=
 @variable(stage2Model, v[1:bCols])
@@ -106,16 +148,19 @@ end
 
 
 #print(stage2Model)
-
+i=1
+#for i in range(1,kmax)
+JuMP.setRHS(kMaxConstr,2)
 status = solve(stage2Model)
-
 println("Objective value: ", getobjectivevalue(stage2Model))
 bSolved = getvalue(b)
 for i=1:length(b)
-	if b[i]!=0
+	if !isequal(bSolved[i], 0)
 		println("b[$i] = ", bSolved[i])
 	end
 end
+	#println("Solve model for kMax = $i out of 195")
+#end
 
 println("STAGE 2 DONE")
 SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
