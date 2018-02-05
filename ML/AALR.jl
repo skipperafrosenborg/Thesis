@@ -3,31 +3,36 @@ Pkg.add("CSV") #Importing csv files
 Pkg.add("JuMP") #JuMP package for writing models
 Pkg.add("CPLEX") #Clp for a solver
 Pkg.add("StatsBase")
+
+println("Loading packages")
 using DataFrames;
 using CSV;
+using StatsBase;
 println("Leeeeroooy Jenkins")
 
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#Esben's path
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+
+#Skipper's path
+cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
+
 #All on monthly data
-mainData = CSV.read("Monthly - Average Value Weighted Returns.csv")
+mainData = CSV.read("Monthly - Average Value Weighted Returns.csv", nullable=false)
 dataSize = size(mainData)
 nColsMain = dataSize[2]
 nRowsMain = dataSize[1]
 colNames = names(mainData)
 
 #Converting it into a datamatrix instead of a dataframe
-stringMatrix = Array(mainData[2:nRowsMain,2:nColsMain])
-dataMatrixMain = parse.(Float64, stringMatrix)
+dataMatrixMain = Array(mainData[:,2:nColsMain])
 
 #Importing exogenous factors
-firmSizeData = CSV.read("Monthly - Average Firm Size.csv")
-stringMatrix = Array(firmSizeData[2:nRowsMain,2:nColsMain])
-dataMatrixFirmSize = parse.(Float64, stringMatrix)
+firmSizeData = CSV.read("Monthly - Average Firm Size.csv", nullable=false)
+dataMatrixFirmSize = Array(firmSizeData[:,2:nColsMain])
 
-equalWeightData = CSV.read("Monthly - Average Equal Weighted Returns.csv")
-numberOfFirms = CSV.read("Monthly - Number of Firms in Portfolios.csv")
-stringMatrix = Array(numberOfFirms[2:nRowsMain,2:nColsMain])
-dataMatrixFirms = parse.(Float64, stringMatrix)
+equalWeightData = CSV.read("Monthly - Average Equal Weighted Returns.csv", nullable=false)
+numberOfFirms = CSV.read("Monthly - Number of Firms in Portfolios.csv", nullable=false)
+dataMatrixFirms = Array(numberOfFirms[:,2:nColsMain])
 println("Monthly Data is loaded")
 
 ##### Making a model
@@ -122,8 +127,6 @@ for i=1:nCols
 end
 
 @constraint(stage2Model, sum(v[i] for i=1:nCols) <= O)
-
-
 
 #print(stage2Model)
 
