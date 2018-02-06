@@ -83,8 +83,8 @@ println("Standardizing data")
 using StatsBase
 
 #Standardize data by coulmn
-y = combinedData[1:250,nColsMain]
-X = combinedData[1:250,1:nColsMain-1]
+y = combinedData[1:1000,nColsMain]
+X = combinedData[1:1000,1:nColsMain-1]
 
 """
 Function that returns the zscore column zscore for each column in the Matrix.
@@ -109,9 +109,8 @@ standY = zscore(y)
 println("Setup model")
 #Define parameters and model
 bCols = size(X)[2]
-z = 0
-b = 0
-stage2Model = Model(solver = CplexSolver())
+
+stage2Model = Model(solver = CplexSolver(CPX_PARAM_MIPDISPLAY = 2))
 bigM = 10
 gamma = 10
 
@@ -129,12 +128,13 @@ gamma = 10
 
 #Define constraints (5c)
 for i=1:bCols
-	@constraint(stage2Model, -bigM*z[i] <= b[i])
-	@constraint(stage2Model, b[i] <= bigM*z[i])
+	addSOS1(stage2Model, [1z[i],1b[i]])
+	#@constraint(stage2Model, -bigM*z[i] <= b[i])
+	#@constraint(stage2Model, b[i] <= bigM*z[i])
 end
 
 #Define kmax constraint (5d)
-@constraint(stage2Model, kMaxConstr, sum(z[i] for i=1:bCols) <= kmax)
+@constraint(stage2Model, kMaxConstr, sum(z[i] for i=1:bCols) >= kmax)
 
 #=
 @variable(stage2Model, v[1:bCols])
@@ -149,14 +149,20 @@ end
 
 #print(stage2Model)
 i=1
-#for i in range(1,kmax)
-JuMP.setRHS(kMaxConstr,2)
-status = solve(stage2Model)
-println("Objective value: ", getobjectivevalue(stage2Model))
-bSolved = getvalue(b)
-for i=1:length(b)
-	if !isequal(bSolved[i], 0)
-		println("b[$i] = ", bSolved[i])
+#for i in range(1,Int64(kmax))
+for i in 4:5
+	#JuMP.setRHS(kMaxConstr,-bCols+i)
+	JuMP.setRHS(kMaxConstr, 100)
+	println("Starting to solve stage 2 model with kMax = $i")
+	status = solve(stage2Model)
+	println("Objective value: ", getobjectivevalue(stage2Model))
+	bSolved = getvalue(b)
+	zSolved = getvalue(z)
+	for i=1:length(b)
+		if !isequal(bSolved[i], 0)
+			println("b[$i] = ", bSolved[i])
+			println("z[$i] = ", zSolved[i])
+		end
 	end
 end
 	#println("Solve model for kMax = $i out of 195")
