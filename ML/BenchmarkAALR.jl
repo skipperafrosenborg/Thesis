@@ -58,7 +58,7 @@ for i=1:length(z)
 end
 
 #Print model
-print(m)
+#print(m)
 
 #Get solution status
 status = solve(m)
@@ -95,7 +95,7 @@ function zScoreByColumn(X::AbstractArray{T}) where {T<:Real}
 	for i=1:size(X)[2]
 		temp = zscore(X[:,i])
 		if any(isnan(temp))
-			println("$i ERROR ERROR")
+			println("Column $i remains unchanged as std = 0")
 		else
 			standX[:,i] = copy(zscore(X[:,i]))
 		end
@@ -110,7 +110,7 @@ println("Setup model")
 #Define parameters and model
 bCols = size(X)[2]
 
-stage2Model = Model(solver = CplexSolver(CPX_PARAM_MIPDISPLAY = 2))
+stage2Model = Model(solver = CplexSolver(CPX_PARAM_MIPDISPLAY = 3))
 bigM = 10
 gamma = 10
 
@@ -127,14 +127,14 @@ gamma = 10
 @variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
 
 #Define constraints (5c)
+
 for i=1:bCols
-	addSOS1(stage2Model, [1z[i],1b[i]])
-	#@constraint(stage2Model, -bigM*z[i] <= b[i])
-	#@constraint(stage2Model, b[i] <= bigM*z[i])
+	@constraint(stage2Model, -bigM*z[i] <= b[i])
+	@constraint(stage2Model, b[i] <= bigM*z[i])
 end
 
 #Define kmax constraint (5d)
-@constraint(stage2Model, kMaxConstr, sum(z[i] for i=1:bCols) >= kmax)
+@constraint(stage2Model, kMaxConstr, sum(z[i] for i=1:bCols) <= kmax)
 
 #=
 @variable(stage2Model, v[1:bCols])
@@ -152,7 +152,7 @@ i=1
 #for i in range(1,Int64(kmax))
 for i in 4:5
 	#JuMP.setRHS(kMaxConstr,-bCols+i)
-	JuMP.setRHS(kMaxConstr, 100)
+	JuMP.setRHS(kMaxConstr, i)
 	println("Starting to solve stage 2 model with kMax = $i")
 	status = solve(stage2Model)
 	println("Objective value: ", getobjectivevalue(stage2Model))
