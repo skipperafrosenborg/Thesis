@@ -8,8 +8,8 @@ function loadCPUData(path)
     cd(path)
     mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
     	"MMIN","MMAX","CACH","CHMIN","CHMAX","PRP","ERP"], datarow=1, nullable=false)
-    mainData = copy(mainData[:,3:10])
-    delete!(mainData, :PRP)
+    mainData = copy(mainData[:,3:9])
+    #delete!(mainData, :PRP)
     return mainData
 end
 

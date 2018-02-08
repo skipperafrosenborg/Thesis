@@ -50,13 +50,14 @@ function shrinkValuesH(betaVector, kMax, HCArray)
 
 		#Find place in column
 		nColOrig = size(zeroVector)[1]/4
-		#println(nColOrig)
+
 		if ind%nColOrig == 0
-			indNum = 18
+			indNum = nColOrig
 		else
 			indNum = ind%nColOrig
 		end
 		placeInColumn = floor(ind/nColOrig)
+		#println(nColOrig)
 		#println(placeInColumn)
 		#println(ind%nColOrig)
 		for j in 0:3

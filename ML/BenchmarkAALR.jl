@@ -1,6 +1,6 @@
 using JuMP
 #using CPLEX
-using ConditionalJuMP
+#using ConditionalJuMP
 using Gurobi
 using StatsBase
 using DataFrames
@@ -14,11 +14,10 @@ println("Leeeeroooy Jenkins")
 
 #Skipper's path
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
-cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
 
 #mainData = loadHousingData(path)
-#mainData = loadCPUData(path)
-mainData = loadElevatorData(path)
+mainData = loadCPUData(path)
+#mainData = loadElevatorData(path)
 
 dataSize = size(mainData)
 colNames = names(mainData)
@@ -73,8 +72,8 @@ println("STAGE 2 INITIATED")
 println("Standardizing data")
 
 #Split data by X and y
-y = combinedData[:,nColsMain]
-X = combinedData[:,1:nColsMain-1]
+y = combinedData[:,nCols]
+X = combinedData[:,1:nCols-1]
 
 # TRANSFORMATIONS ###
 X = expandWithTransformations(X)
@@ -90,7 +89,7 @@ bSolved = []
 warmStartBeta = []
 warmstartZ = []
 HC = cor(X)
-for i in 15:5:kmax
+for i in 4:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
@@ -98,9 +97,10 @@ for i in 15:5:kmax
 	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
 	gamma = 10
 
+	consplit = 10
 	#Define variables
 	@variable(stage2Model, b[1:bCols])
-	@variable(stage2Model, T)
+	@variable(stage2Model, T[1:consplit])
 	#Define binary variable (5b)
 	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
 	#@variable(stage2Model, O)
@@ -110,7 +110,7 @@ for i in 15:5:kmax
 	warmStartError = 1e6
 	for j in 1:5
 		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
-		tempError = norm(standY- standX*warmStartBetaTemp)
+		tempError = norm(standY- standX*warmStartBetaTemp)^2
 		println("Iteration $j of 5: Warmstart error is:", tempError)
 		if tempError < warmStartError
 			warmStartError = copy(tempError)
@@ -138,9 +138,23 @@ for i in 15:5:kmax
 	bigM = tau*norm(warmStartBeta, Inf)
 
 	#Define objective function (5a)
-	@objective(stage2Model, Min, T)
-	@constraint(stage2Model, norm(standY - standX*b) <= T)
+	@objective(stage2Model, Min, sum(T[j] for j= 1:consplit))
 
+	println("Trying to implement new constraint")
+	#@constraint(stage2Model, norm(standY - standX*b) <= T)
+
+	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j=1:nRows) <= T)
+
+	for k = 1:(consplit-1)
+			@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+(k-1)*floor(nRows/consplit)):Int64(floor(nRows/consplit)+(k-1)*floor(nRows/consplit))) <=   T[k])
+			println("Constraint $k added")
+	end
+
+	@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
+
+	println("Implemented new constraints")
+
+	#@constraint(stage2Model, 1 <=T)
 	#Define constraints (5c)
 	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
 	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
@@ -166,11 +180,11 @@ for i in 15:5:kmax
 	end
 
 	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nColsMain-1)
-		@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+	for j=1:(nCols-1)
+		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
 
 		#Check for errors in warmstart
-		if warmstartZ[j]+warmstartZ[j+(nColsMain-1)]+warmstartZ[j+2*(nColsMain-1)]+warmstartZ[j+3*(nColsMain-1)] > 1
+		if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
 			println("Error with index $j in constraingt 5g")
 		end
 	end
