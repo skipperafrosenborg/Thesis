@@ -7,7 +7,7 @@ function zScoreByColumn(X)
 	for i=1:size(X)[2]
 		temp = zscore(X[:,i])
 		if any(isnan.(temp))
-			println("Column $i remains unchanged as std = 0")
+			#println("Column $i remains unchanged as std = 0")
 		else
 			standX[:,i] = copy(zscore(X[:,i]))
 		end
@@ -19,11 +19,13 @@ end
 Function an array with the kMax largest absolute values
 and all other values shrunk to 0
 """
-function shrinkValuesH(betaVector, kMax)
+function shrinkValuesH(betaVector, kMax, HCArray)
 	#Make aboslute copy of betaVector
 	absCopy = copy(abs.(betaVector))
 	#Create zeroVector
 	zeroVector = zeros(betaVector)
+
+    #If any found, set value to 0 and continue
 
 	for i in 1:kMax
 		#Find index of maximum value in absolute vector
@@ -34,6 +36,20 @@ function shrinkValuesH(betaVector, kMax)
 
 		#Replace index in absolute vector with 0
 		absCopy[ind] = 0
+
+        #Check if index is in HC array and add all
+        HCvar = find(HCArray[:,1] .== ind)
+        #println(find(HCArray[:,1] .== ind))
+        #println(HCvar)
+        #println(isempty(HCvar))
+
+
+        if !isempty(HCvar)
+            for j in 1:length(HCvar)
+                absCopy[HCArray[HCvar[j],2]] = 0
+                #println("Extra shrink")
+            end
+        end
 	end
 	return zeroVector
 end
@@ -49,8 +65,20 @@ end
 Vanilla gradient decent which only keeps the kMax biggest values. All other
 values are shrunk to 0.
 """
-function gradDecent(X, y, L, epsilon, kMax)
-	betaVector = shrinkValuesH(rand(size(X)[2]),kmax)
+function gradDecent(X, y, L, epsilon, kMax, HC)
+    HCArray = Matrix(0,2)
+    rho = 0.8
+    for k=1:size(X)[2]
+    	for j=1:size(X)[2]
+    		if k != j
+    			if HC[k,j] >= rho
+                    HCArray = cat(1, HCArray, [k j])
+    			end
+    		end
+    	end
+    end
+
+    betaVector = shrinkValuesH(rand(size(X)[2]),kmax, HCArray)
 
 	#Initialise parameters
 	iter = 0
@@ -64,13 +92,13 @@ function gradDecent(X, y, L, epsilon, kMax)
 		gradBeta = -X'*(y-X*betaVector)
 
 		#Shrink smalles values
-		betaVector = copy(shrinkValuesH(betaVector-1/L*gradBeta, kMax))
+		betaVector = copy(shrinkValuesH(betaVector-1/L*gradBeta, kMax, HCArray))
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
-		#println(curError)
 		iter += 1
+
 		if iter%1000 == 0
-			#println("Iteration $iter with error on $curError")
+			println("Iteration $iter with error on $curError")
 		end
 	end
 	#println("End error: $curError")
@@ -107,26 +135,43 @@ function expandWithTransformations(X)
 	expandedX = copy(Array{Float64}(X))
 	xCols = size(expandedX)[2]
 	xRows = size(expandedX)[1]
+
+	# squared transformation column
 	for i=1:xCols
-		# squared transformation column
 		insertArray = []
-		for i=1:xRows
-			push!(insertArray, expandedX[i,1]^2)
-		end
-		expandedX = hcat(expandedX, insertArray)
-		# log transformation column
-		insertArray = []
-		for i=1:xRows
-			push!(insertArray, log(expandedX[i,1]))
-		end
-		expandedX = hcat(expandedX, insertArray)
-		# sqrt transformation column
-		insertArray = []
-		for i=1:xRows
-			push!(insertArray, sqrt(expandedX[i,1]))
+		for j=1:xRows
+			push!(insertArray, expandedX[j,i]^2)
 		end
 		expandedX = hcat(expandedX, insertArray)
 	end
+
+	# Natural log transformation column
+	for i=1:xCols
+		insertArray = []
+		for j=1:xRows
+			if count(k->(k<=0), expandedX[j,i]) > 0
+				push!(insertArray, 0)
+			else
+				push!(insertArray, log(expandedX[j,i]))
+			end
+		end
+		expandedX = hcat(expandedX, insertArray)
+	end
+
+	# sqrt transformation column
+	for i=1:xCols
+		insertArray = []
+		for j=1:xRows
+			if count(k->(k<=0), expandedX[j,i]) > 0
+				push!(insertArray, 0)
+			else
+				push!(insertArray, sqrt(expandedX[j,i]))
+			end
+		end
+		expandedX = hcat(expandedX, insertArray)
+	end
+
+	#Ensure we return a Float64 array
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
 end

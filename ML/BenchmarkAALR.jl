@@ -16,11 +16,16 @@ println("Leeeeroooy Jenkins")
 #Skipper's path
 cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
 
-#All on monthly data
-mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)
+#mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)
+
 #mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
 #	"MMIN","MMAX","CACH","CHMIN","CHMAX","PRP","ERP"], datarow=1, nullable=false)
-#mainData = copy(mainData[:,3:9])
+#mainData = copy(mainData[:,3:10])
+#delete!(mainData, :PRP)
+
+mainData = CSV.read("Elevators/elevators.data", header=["climbRate", "Sgz", "p", "q", "curRoll", "absRoll", "diffClb",
+	"diffRollRate", "diffDiffClb", "SaTime1", "SaTime2", "SaTime3", "SaTime4", "diffSaTime1", "diffSaTime2",
+	"diffSaTime3", "diffSaTime4", "Sa", "Goal"], datarow=1, nullable=false)
 
 dataSize = size(mainData)
 nRowsMain = dataSize[1]
@@ -84,7 +89,11 @@ X = combinedData[:,1:nColsMain-1]
 
 ### TRANSFORMATIONS ###
 X = combinedData[:,1:nColsMain-1]
-X = expandWithTransformations(X)
+
+transformation = true
+if transformation
+	X = expandWithTransformations(X)
+end
 
 standX = zScoreByColumn(X)
 standY = zscore(y)
@@ -96,8 +105,10 @@ standY = zscore(y)
 
 kValue = []
 RsquaredValue = []
+bSolved = []
+warmStartBeta = []
 HC = cor(X)
-for i in 1:2:kmax
+for i in 10:5:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
@@ -114,17 +125,19 @@ for i in 1:2:kmax
 	println("Calculating warmstart solution")
 	#Calculate warmstart
 	warmstartError = 1e6
-	warmStartBeta = []
-	for i in 1:20
-		warmStartBetaTemp = gradDecent(standX, standY, 20000, 1e-6, i)
+	warmStartBeta = bSolved
+	for j in 1:5
+		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
 		tempError = norm(standY- standX*warmStartBetaTemp)
-		println("Warmstart error is:", norm(standY- standX*warmStartBetaTemp))
+		println("Iteration $j of 5: Warmstart error is:", tempError)
 		if tempError < warmstartError
-			warmstartError = tempError
-			warmStartBeta = warmStartBetaTemp
-			println("Changed warmstartBeta")
+			warmstartError = copy(tempError)
+			warmStartBeta = copy(warmStartBetaTemp)
+			println("Iteration $j of 5: Changed warmstartBeta")
 		end
 	end
+
+	println("Warmstart error is:", warmstartError)
 
 	for j in 1:bCols
 		setvalue(b[j], warmStartBeta[j])
@@ -161,8 +174,10 @@ for i in 1:2:kmax
 	end
 
 	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nColsMain-1)
-		@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+	if transformation == true
+		for j=1:(nColsMain-1)
+			@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+		end
 	end
 
 	#=
@@ -182,7 +197,7 @@ for i in 1:2:kmax
 	#print(stage2Model)
 
 	warmstart!(stage2Model)
-	println("Warmstart succes!")
+	#println("Warmstart succes!")
 
 	#Solve Stage 2 model
 	status = solve(stage2Model)
@@ -194,7 +209,7 @@ for i in 1:2:kmax
 	Rsquared = getRSquared(standX,standY,bSolved)
 	push!(kValue, i)
 	push!(RsquaredValue, Rsquared)
-	println("Rsquared value is: $Rsquared")
+	println("Rsquared value is: $Rsquared for kMax = $i")
 
 	#printNonZeroValues(bSolved)
 end
