@@ -6,34 +6,25 @@ using StatsBase
 using DataFrames
 using CSV
 include("SupportFunction.jl")
+include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
 #Esben's path
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 
 #Skipper's path
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
 
-#mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)
-
-#mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
-#	"MMIN","MMAX","CACH","CHMIN","CHMAX","PRP","ERP"], datarow=1, nullable=false)
-#mainData = copy(mainData[:,3:10])
-#delete!(mainData, :PRP)
-
-mainData = CSV.read("Elevators/elevators.data", header=["climbRate", "Sgz", "p", "q", "curRoll", "absRoll", "diffClb",
-	"diffRollRate", "diffDiffClb", "SaTime1", "SaTime2", "SaTime3", "SaTime4", "diffSaTime1", "diffSaTime2",
-	"diffSaTime3", "diffSaTime4", "Sa", "Goal"], datarow=1, nullable=false)
+#mainData = loadHousingData(path)
+#mainData = loadCPUData(path)
+mainData = loadElevatorData(path)
 
 dataSize = size(mainData)
-nRowsMain = dataSize[1]
-nColsMain = dataSize[2]
 colNames = names(mainData)
 
 #Converting it into a datamatrix instead of a dataframe
-mainDataMatrix = Array(mainData)
-
-combinedData = copy(mainDataMatrix)
+combinedData = Array(mainData)
 nRows = size(combinedData)[1]
 nCols = size(combinedData)[2]
 
@@ -70,50 +61,40 @@ end
 status = solve(m)
 
 #Get objective value
-println("Objective value: ", getobjectivevalue(m))
+println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
 
 #Get solution value
-zSolved = getvalue(z)
+#zSolved = getvalue(z)
 println("STAGE 1 DONE")
 
 ### STAGE 2 ###
 println("STAGE 2 INITIATED")
 println("Standardizing data")
 
-#Standardize data by coulmn
+#Split data by X and y
 y = combinedData[:,nColsMain]
 X = combinedData[:,1:nColsMain-1]
 
-### TRANSFORMATIONS ###
-X = combinedData[:,1:nColsMain-1]
+# TRANSFORMATIONS ###
+X = expandWithTransformations(X)
 
-transformation = true
-if transformation
-	X = expandWithTransformations(X)
-end
-
+# Standardize
 standX = zScoreByColumn(X)
 standY = zscore(y)
 
-#for i in 1:30
-#	warmStartBeta = gradDecent(standX, standY, 20000, 1e-6, 20)
-   	#println("Iteration $i:\t R^2 is:", getRSquared(standX, standY, warmStartBeta))
-#end
-
+#Initialise values for check later
 kValue = []
 RsquaredValue = []
 bSolved = []
 warmStartBeta = []
+warmstartZ = []
 HC = cor(X)
-stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
-i=15
 for i in 15:5:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
 
-	#stage2Model = Model(solver = CplexSolver(CPX_PARAM_TILIM = 400))
 	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
 	gamma = 10
 
@@ -126,21 +107,22 @@ for i in 15:5:kmax
 
 	println("Calculating warmstart solution")
 	#Calculate warmstart
-	warmstartError = 1e6
-	warmStartBeta = bSolved
-	for j in 1:2
+	warmStartError = 1e6
+	for j in 1:5
 		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
 		tempError = norm(standY- standX*warmStartBetaTemp)
 		println("Iteration $j of 5: Warmstart error is:", tempError)
-		if tempError < warmstartError
-			warmstartError = copy(tempError)
+		if tempError < warmStartError
+			warmStartError = copy(tempError)
 			warmStartBeta = copy(warmStartBetaTemp)
 			println("Iteration $j of 5: Changed warmstartBeta")
 		end
 	end
-	warmstartZ = zeros(warmStartBeta)
-	println("Warmstart error is:", warmstartError)
 
+	println("Warmstart error is:", warmStartError)
+
+	#Set warmstart values
+	warmstartZ = zeros(warmStartBeta)
 	for j in 1:bCols
 		setvalue(b[j], warmStartBeta[j])
 		if isequal(warmStartBeta[j],0)
@@ -184,26 +166,14 @@ for i in 15:5:kmax
 	end
 
 	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	if transformation == true
-		for j=1:(nColsMain-1)
-			@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+	for j=1:(nColsMain-1)
+		@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
 
-			#Check for errors in warmstart
-			if warmstartZ[j]+warmstartZ[j+(nColsMain-1)]+warmstartZ[j+2*(nColsMain-1)]+warmstartZ[j+3*(nColsMain-1)] > 1
-				println("Error with index $j in constraingt 5g")
-			end
+		#Check for errors in warmstart
+		if warmstartZ[j]+warmstartZ[j+(nColsMain-1)]+warmstartZ[j+2*(nColsMain-1)]+warmstartZ[j+3*(nColsMain-1)] > 1
+			println("Error with index $j in constraingt 5g")
 		end
 	end
-
-	#=
-	@variable(stage2Model, v[1:bCols])
-	for i=1:bCols
-		@constraint(stage2Model, b[i]  <= v[i])
-		@constraint(stage2Model, -b[i] <= v[i])
-	end
-
-	@constraint(stage2Model, sum(v[i] for i=1:bCols) <= O)
-	=#
 
 	#Set kMax rhs constraint
 	JuMP.setRHS(kMaxConstr, i)
