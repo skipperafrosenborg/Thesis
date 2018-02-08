@@ -19,6 +19,7 @@ end
 Function an array with the kMax largest absolute values
 and all other values shrunk to 0
 """
+#NEED TO IMPLEMENT THAT QUADRATIC, LOG AND SQRT CAN'T BE SELECTED
 function shrinkValuesH(betaVector, kMax, HCArray)
 	#Make aboslute copy of betaVector
 	absCopy = copy(abs.(betaVector))
@@ -39,10 +40,6 @@ function shrinkValuesH(betaVector, kMax, HCArray)
 
         #Check if index is in HC array and add all
         HCvar = find(HCArray[:,1] .== ind)
-        #println(find(HCArray[:,1] .== ind))
-        #println(HCvar)
-        #println(isempty(HCvar))
-
 
         if !isempty(HCvar)
             for j in 1:length(HCvar)
@@ -50,6 +47,23 @@ function shrinkValuesH(betaVector, kMax, HCArray)
                 #println("Extra shrink")
             end
         end
+
+		#Find place in column
+		nColOrig = size(zeroVector)[1]/4
+		#println(nColOrig)
+		if ind%nColOrig == 0
+			indNum = 18
+		else
+			indNum = ind%nColOrig
+		end
+		placeInColumn = floor(ind/nColOrig)
+		#println(placeInColumn)
+		#println(ind%nColOrig)
+		for j in 0:3
+			if j != placeInColumn
+				absCopy[Int64(indNum+j*nColOrig)] = 0
+			end
+		end
 	end
 	return zeroVector
 end

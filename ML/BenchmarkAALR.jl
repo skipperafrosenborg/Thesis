@@ -1,7 +1,5 @@
-#Pkg.add("CSV");
-#Pkg.add("DataFrames");
 using JuMP
-using CPLEX
+#using CPLEX
 using ConditionalJuMP
 using Gurobi
 using StatsBase
@@ -42,7 +40,7 @@ nCols = size(combinedData)[2]
 ### STAGE 1 ###
 println("STAGE 1 INITIATED")
 #Define solve
-m = Model(solver = CplexSolver())
+m = Model(solver = GurobiSolver())
 
 #Add binary variables variables
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
@@ -108,7 +106,9 @@ RsquaredValue = []
 bSolved = []
 warmStartBeta = []
 HC = cor(X)
-for i in 10:5:kmax
+stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+i=15
+for i in 15:5:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
@@ -120,13 +120,15 @@ for i in 10:5:kmax
 	#Define variables
 	@variable(stage2Model, b[1:bCols])
 	@variable(stage2Model, T)
+	#Define binary variable (5b)
+	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
 	#@variable(stage2Model, O)
 
 	println("Calculating warmstart solution")
 	#Calculate warmstart
 	warmstartError = 1e6
 	warmStartBeta = bSolved
-	for j in 1:5
+	for j in 1:2
 		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
 		tempError = norm(standY- standX*warmStartBetaTemp)
 		println("Iteration $j of 5: Warmstart error is:", tempError)
@@ -136,11 +138,17 @@ for i in 10:5:kmax
 			println("Iteration $j of 5: Changed warmstartBeta")
 		end
 	end
-
+	warmstartZ = zeros(warmStartBeta)
 	println("Warmstart error is:", warmstartError)
 
 	for j in 1:bCols
 		setvalue(b[j], warmStartBeta[j])
+		if isequal(warmStartBeta[j],0)
+			setvalue(z[j], 0)
+		else
+			setvalue(z[j], 1)
+			warmstartZ[j] = 1
+		end
 	end
 
 	#Calculating bigM
@@ -150,9 +158,6 @@ for i in 10:5:kmax
 	#Define objective function (5a)
 	@objective(stage2Model, Min, T)
 	@constraint(stage2Model, norm(standY - standX*b) <= T)
-
-	#Define binary variable (5b)
-	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
 
 	#Define constraints (5c)
 	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
@@ -168,6 +173,11 @@ for i in 10:5:kmax
 			if k != j
 				if HC[k,j] >= rho
 					@constraint(stage2Model,z[k]+z[j] <= 1)
+
+					#Check for errors in warmstart
+					if warmstartZ[j] + warmstartZ[k] > 1
+						println("Error with index $j and $k in constraingt 5f")
+					end
 				end
 			end
 		end
@@ -177,6 +187,11 @@ for i in 10:5:kmax
 	if transformation == true
 		for j=1:(nColsMain-1)
 			@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+
+			#Check for errors in warmstart
+			if warmstartZ[j]+warmstartZ[j+(nColsMain-1)]+warmstartZ[j+2*(nColsMain-1)]+warmstartZ[j+3*(nColsMain-1)] > 1
+				println("Error with index $j in constraingt 5g")
+			end
 		end
 	end
 
@@ -195,9 +210,6 @@ for i in 10:5:kmax
 	println("Starting to solve stage 2 model with kMax = $i")
 
 	#print(stage2Model)
-
-	warmstart!(stage2Model)
-	#println("Warmstart succes!")
 
 	#Solve Stage 2 model
 	status = solve(stage2Model)

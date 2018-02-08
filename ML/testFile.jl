@@ -1,19 +1,49 @@
-function shrinkValuesH(betaVector, kMax)
-	#Make aboslute copy of betaVector
-	absCopy = copy(abs.(betaVector))
-	#Create zeroVector
-	zeroVector = zeros(betaVector)
+using JuMP
+using Gurobi
+##### Simple LP
+# Example taken directly from https://jump.readthedocs.org/en/latest/quickstart.html
 
-	for i in 1:kMax
-		#Find index of maximum value in absolute vector
-		ind = indmax(absCopy)
+println("***** Problem 1 *****")
+m = Model(solver = GurobiSolver())
+@variable(m, 0 <= x <= 2 )
+@variable(m, 0 <= y <= 30 )
 
-		#Replace index in 0 vector with betaVector value of index
-		zeroVector[ind] = betaVector[ind]
+@objective(m, Max, 5x + 3*y )
+@constraint(m, 1x + 5y <= 3.0 )
 
-		#Replace index in absolute vector with 0
-		absCopy[ind] = 0
-	end
+print(m)
 
-	return zeroVector
-end
+status = solve(m)
+
+println("Objective value: ", getobjectivevalue(m))
+println("x = ", getvalue(x))
+println("y = ", getvalue(y))
+
+##### Another simple LP with logical conditions in constraint definition
+# Example from https://groups.google.com/forum/#!topic/julia-opt/pMHz-9YHN2o
+# Note: This example only works with Julia-v0.4 and later
+
+println(" ")
+println("***** Problem 2 *****")
+
+m = Model()
+
+I = 1:5
+
+@variable(m, 0 <= x[I] <= 10)
+@variable(m, 0 <= y[I] <= 10)
+
+# This constraint is only considered when i + j are less than or equal to 3
+# Note: Only supported by Julia-v0.4 and later
+@constraint(m, constr[i=I,j=I; i+j <= 3], x[i] - y[j] == 1)
+
+@objective(m, Min, sum{x[i] + y[i], i=I})
+
+print(m)
+
+status = solve(m)
+
+println(" ")
+println("Objective value: ", getobjectivevalue(m))
+println("x = ", getvalue(x))
+println("y = ", getvalue(y))
