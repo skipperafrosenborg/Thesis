@@ -10,14 +10,16 @@ include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
 #Esben's path
-#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+cd("$(homedir())/Documents/GitHub/Thesis/Data")
+path = "$(homedir())/Documents/GitHub/Thesis/Data"
+
 
 #Skipper's path
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
 #mainData = loadHousingData(path)
-mainData = loadCPUData(path)
-#mainData = loadElevatorData(path)
+#mainData = loadCPUData(path)
+mainData = loadElevatorData(path)
 
 dataSize = size(mainData)
 colNames = names(mainData)
@@ -89,7 +91,7 @@ bSolved = []
 warmStartBeta = []
 warmstartZ = []
 HC = cor(X)
-for i in 4:kmax
+for i in 7:7#:5:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
@@ -100,7 +102,9 @@ for i in 4:kmax
 	consplit = 10
 	#Define variables
 	@variable(stage2Model, b[1:bCols])
-	@variable(stage2Model, T[1:consplit])
+
+	@variable(stage2Model, T)
+	#@variable(stage2Model, T[1:consplit])
 	#Define binary variable (5b)
 	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
 	#@variable(stage2Model, O)
@@ -138,19 +142,32 @@ for i in 4:kmax
 	bigM = tau*norm(warmStartBeta, Inf)
 
 	#Define objective function (5a)
-	@objective(stage2Model, Min, sum(T[j] for j= 1:consplit))
+	@objective(stage2Model, Min, T)#sum(T[j] for j= 1:consplit))
 
 	println("Trying to implement new constraint")
 	#@constraint(stage2Model, norm(standY - standX*b) <= T)
 
+
+
+
+	expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
+	for l=2:nRows
+		tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
+		append!(expr, tempExpr)
+		println("Constraint $l added")
+	end
+	println("Successfully added quadratic constraints")
+	@constraint(stage2Model, expr <= T)
+
 	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j=1:nRows) <= T)
 
+	#=
 	for k = 1:(consplit-1)
 			@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+(k-1)*floor(nRows/consplit)):Int64(floor(nRows/consplit)+(k-1)*floor(nRows/consplit))) <=   T[k])
 			println("Constraint $k added")
 	end
-
-	@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
+	=#
+	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
 
 	println("Implemented new constraints")
 
