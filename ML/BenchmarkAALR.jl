@@ -6,7 +6,7 @@ using StatsBase
 using DataFrames
 using CSV
 using MLDataUtils
-include("SupportFunction.jl")
+@everywhere include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
@@ -17,22 +17,27 @@ println("Leeeeroooy Jenkins")
 #Skipper's path
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
-#mainData = loadHousingData(path)
+mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-mainData, testData = loadElevatorData(path)
 
-dataSize = size(mainData)
-colNames = names(mainData)
-
+mainDataShuf = mainData
 #mainDataShuf = shuffleobs(mainData)
-#train, test = splitobs(getobs(mainDataShuf), at = 0.5)
-
-train = Array(mainData)
+train, test = splitobs(getobs(mainDataShuf), at = 0.5)
 
 trainingData = Array(train)
+testData = Array(test)
+nRows = size(trainingData)[1]
+nCols = size(trainingData)[2]
+
+#=
+mainData, testData = loadElevatorData(path)
+dataSize = size(mainData)
+colNames = names(mainData)
+trainingData = Array(mainData)
 testData = Array(testData)
 nRows = size(trainingData)[1]
 nCols = size(trainingData)[2]
+=#
 
 ### STAGE 1 ###
 println("STAGE 1 INITIATED")
@@ -89,8 +94,8 @@ X = expandWithTransformations(X)
 XTest = expandWithTransformations(XTest)
 
 # Standardize
-standX = zScoreByColumn(X)
-standY = zscore(y)
+@everywhere standX = zScoreByColumn(X)
+@everywhere standY = zscore(y)
 standXTest = zScoreByColumn(XTest)
 standYTest = zscore(yTest)
 
@@ -103,36 +108,60 @@ writedlm("Elevators/elevatorYTest.CSV",standYTest,",")
 =#
 
 #Initialise values for check later
+bCols = size(X)[2]
 kValue = []
 RsquaredValue = []
 bSolved = []
 bestBeta = []
 warmStartBeta = []
 warmstartZ = []
-HC = cor(X)
-for i in 2:1:kmax
-	println("Setup model")
-	#Define parameters and model
-	bCols = size(X)[2]
 
-	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
-	gamma = 10
+startIter = 1
+stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+totalExpr = @expression(stage2Model, 0)
+@everywhere HC = cor(X)
+@everywhere bigM = 0
+@everywhere tau = 2
+
+function getBigM(i)
+	warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC)
+	bigMTemp = tau*norm(warmStartBetaTemp, Inf)
+	println("Calculated big M iteration $i/$kmax")
+	return i, bigMTemp
+end
 
 
-	#Define variables
-	@variable(stage2Model, b[1:bCols])
+@time(test = pmap(getBigM, Array(1:1)))
 
-	@variable(stage2Model, T)
-	#@variable(stage2Model, T[1:consplit])
-	#Define binary variable (5b)
-	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
-	#@variable(stage2Model, O)
+@time(for i in 1:1
+	getBigM(i)
+end
+)
+
+
+for i in startIter:1:kmax
+	if i == startIter
+		println("Setup model")
+		#Define parameters and model
+		stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+		gamma = 10
+
+		#Define variables
+		@variable(stage2Model, b[1:bCols])
+		@variable(stage2Model, T)
+
+		#Define binary variable (5b)
+		@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+
+		#Define objective function (5a)
+		@objective(stage2Model, Min, T)
+	end
 
 	println("Calculating warmstart solution")
 	#Calculate warmstart
 	warmStartError = 1e6
 	for j in 1:5
-		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
+		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC)
 		tempError = norm(standY- standX*warmStartBetaTemp)^2
 		println("Iteration $j of 5: Warmstart error is:", tempError)
 		if tempError < warmStartError
@@ -156,71 +185,96 @@ for i in 2:1:kmax
 		end
 	end
 
-	#Calculating bigM
-	tau = 2
-	bigM = tau*norm(warmStartBeta, Inf)
+	if i == startIter
+		println("Trying to implement new constraint")
+		xSquareExpr = @expression(stage2Model, 0*b[1]^2)
+		for l = 1:bCols
+	   		coef = 0
+	   		for j = 1:nRows
+	           coef += standX[j,l]^(2)
+		    end
+	   		append!(xSquareExpr, @expression(stage2Model, coef*b[l]^2))
+		end
+		println("Implemented x^2")
 
-	#Define objective function (5a)
-	@objective(stage2Model, Min, T)#sum(T[j] for j= 1:consplit))
+		ySquaredExpr = @expression(stage2Model, 0*b[1])
+		for j = 1:nRows
+	   		append!(ySquaredExpr,@expression(stage2Model, standY[j,1]^2))
+		end
+		print(ySquaredExpr)
+		println("Implemented y^2")
 
-	println("Trying to implement new constraint")
-	#@constraint(stage2Model, norm(standY - standX*b) <= T)
+		simpleBetaExpr = @expression(stage2Model, 0*b[1])
+		for l = 1:bCols
+	    	coef = 0
+	    	for j = 1:nRows
+	         	coef += -1*2*standX[j, l]*standY[j]
+	    	end
+	    	append!(simpleBetaExpr, @expression(stage2Model, coef*b[l]))
+		end
+		println("Implemented simpleBetaExpr")
 
- 	#Working for p<100
-	expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
-	for l=2:nRows
-		tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
-		append!(expr, tempExpr)
-		#println("Constraint $l added")
-	end
-	println("Successfully added quadratic constraints")
-	@constraint(stage2Model, expr <= T)
+		crossBetaExpr = @expression(stage2Model, 0*b[1]*b[2])
+		iter = 1
+		for l = 1:bCols
+	    	for k = (l + 1):bCols
+	         	coef = 0
+	         	for j = 1:nRows
+	                coef += 2*standX[j,l]*standX[j,k]
+	         	end
+				append!(crossBetaExpr, @expression(stage2Model, coef*b[l,1]*b[k,1]))
+	    	end
+			println("Finished out loop of $l/$bCols")
+		end
+		println("Implemented crossBetaExpr")
+		totalExpr = @expression(stage2Model, crossBetaExpr+simpleBetaExpr+xSquareExpr+ySquaredExpr)
+		@constraint(stage2Model, totalExpr <= T)
+		println("Successfully added quadratic constraints")
 
-	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j=1:nRows) <= T)
+		#Define constraints (5c)
+		@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
+		@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
 
-	#=
-	for k = 1:(consplit-1)
-			@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+(k-1)*floor(nRows/consplit)):Int64(floor(nRows/consplit)+(k-1)*floor(nRows/consplit))) <=   T[k])
-			println("Constraint $k added")
-	end
-	=#
-	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
+		#Define kmax constraint (5d)
+		@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
 
-	println("Implemented new constraints")
+		#Constraint 5f - can only select one of a pair of highly correlated features
+		rho = 0.8
+		for k=1:bCols
+			for j=1:bCols
+				if k != j
+					if HC[k,j] >= rho
+						@constraint(stage2Model,z[k]+z[j] <= 1)
 
-	#@constraint(stage2Model, 1 <=T)
-	#Define constraints (5c)
-	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
-	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
-
-	#Define kmax constraint (5d)
-	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
-
-	#Constraint 5f - can only select one of a pair of highly correlated features
-	rho = 0.8
-	for k=1:bCols
-		for j=1:bCols
-			if k != j
-				if HC[k,j] >= rho
-					@constraint(stage2Model,z[k]+z[j] <= 1)
-
-					#Check for errors in warmstart
-					if warmstartZ[j] + warmstartZ[k] > 1
-						println("Error with index $j and $k in constraingt 5f")
+						#Check for errors in warmstart
+						if warmstartZ[j] + warmstartZ[k] > 1
+							println("Error with index $j and $k in constraingt 5f")
+						end
 					end
 				end
 			end
 		end
-	end
 
-	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nCols-1)
-		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
+		#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+		for j=1:(nCols-1)
+			@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
 
-		#Check for errors in warmstart
-		if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
-			println("Error with index $j in constraingt 5g")
+			#Check for errors in warmstart
+			if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
+				println("Error with index $j in constraingt 5g")
+			end
 		end
+
+		#=
+		#Working for p<100
+		expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
+		for l=2:nRows
+			tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
+			append!(expr, tempExpr)
+			#println("Constraint $l added")
+		end
+		@constraint(stage2Model, expr <= T)
+		=#
 	end
 
 	#Set kMax rhs constraint
@@ -239,6 +293,7 @@ for i in 2:1:kmax
 
 	#Out of sample test
 	Rsquared = getRSquared(standXTest,standYTest,bSolved)
+	#Rsquared = getRSquared(standX,standY,bSolved)
 	if any(Rsquared .> RsquaredValue) || isempty(RsquaredValue)
 		bestBeta = bSolved
 	end
@@ -248,6 +303,7 @@ for i in 2:1:kmax
 
 	#printNonZeroValues(bSolved)
 end
+println([kValue RsquaredValue])
 println("STAGE 2 DONE")
 bestRsquared = maximum(RsquaredValue)
 kBestSol = kValue[indmax(RsquaredValue)]
