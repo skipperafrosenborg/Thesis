@@ -5,29 +5,34 @@ using Gurobi
 using StatsBase
 using DataFrames
 using CSV
+using MLDataUtils
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
 #Esben's path
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
-path = "$(homedir())/Documents/GitHub/Thesis/Data"
-
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
 #mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-mainData = loadElevatorData(path)
+mainData, testData = loadElevatorData(path)
 
 dataSize = size(mainData)
 colNames = names(mainData)
 
-#Converting it into a datamatrix instead of a dataframe
-combinedData = Array(mainData)
-nRows = size(combinedData)[1]
-nCols = size(combinedData)[2]
+#mainDataShuf = shuffleobs(mainData)
+#train, test = splitobs(getobs(mainDataShuf), at = 0.5)
+
+train = Array(mainData)
+
+trainingData = Array(train)
+testData = Array(testData)
+nRows = size(trainingData)[1]
+nCols = size(trainingData)[2]
 
 ### STAGE 1 ###
 println("STAGE 1 INITIATED")
@@ -38,7 +43,7 @@ m = Model(solver = GurobiSolver())
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
 #Calculate highly correlated matix
-HC = cor(combinedData)
+HC = cor(trainingData)
 
 #Define objective function
 @objective(m, Max, sum(z[i] for i=1:length(z)))
@@ -74,24 +79,38 @@ println("STAGE 2 INITIATED")
 println("Standardizing data")
 
 #Split data by X and y
-y = combinedData[:,nCols]
-X = combinedData[:,1:nCols-1]
+y = trainingData[:,nCols]
+X = trainingData[:,1:nCols-1]
+yTest = testData[:,nCols]
+XTest = testData[:,1:nCols-1]
 
 # TRANSFORMATIONS ###
 X = expandWithTransformations(X)
+XTest = expandWithTransformations(XTest)
 
 # Standardize
 standX = zScoreByColumn(X)
 standY = zscore(y)
+standXTest = zScoreByColumn(XTest)
+standYTest = zscore(yTest)
+
+# Output for Lasso regression in R
+#=
+writedlm("Elevators/elevatorXTrain.CSV",standX,",")
+writedlm("Elevators/elevatorYTrain.CSV",standY,",")
+writedlm("Elevators/elevatorXTest.CSV",standXTest,",")
+writedlm("Elevators/elevatorYTest.CSV",standYTest,",")
+=#
 
 #Initialise values for check later
 kValue = []
 RsquaredValue = []
 bSolved = []
+bestBeta = []
 warmStartBeta = []
 warmstartZ = []
 HC = cor(X)
-for i in 7:7#:5:kmax
+for i in 2:1:kmax
 	println("Setup model")
 	#Define parameters and model
 	bCols = size(X)[2]
@@ -99,7 +118,7 @@ for i in 7:7#:5:kmax
 	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
 	gamma = 10
 
-	consplit = 10
+
 	#Define variables
 	@variable(stage2Model, b[1:bCols])
 
@@ -147,14 +166,12 @@ for i in 7:7#:5:kmax
 	println("Trying to implement new constraint")
 	#@constraint(stage2Model, norm(standY - standX*b) <= T)
 
-
-
-
+ 	#Working for p<100
 	expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
 	for l=2:nRows
 		tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
 		append!(expr, tempExpr)
-		println("Constraint $l added")
+		#println("Constraint $l added")
 	end
 	println("Successfully added quadratic constraints")
 	@constraint(stage2Model, expr <= T)
@@ -219,7 +236,12 @@ for i in 7:7#:5:kmax
 	#Get solution and calculate R^2
 	bSolved = getvalue(b)
 	zSolved = getvalue(z)
-	Rsquared = getRSquared(standX,standY,bSolved)
+
+	#Out of sample test
+	Rsquared = getRSquared(standXTest,standYTest,bSolved)
+	if any(Rsquared .> RsquaredValue) || isempty(RsquaredValue)
+		bestBeta = bSolved
+	end
 	push!(kValue, i)
 	push!(RsquaredValue, Rsquared)
 	println("Rsquared value is: $Rsquared for kMax = $i")
