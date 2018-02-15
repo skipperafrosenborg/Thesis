@@ -1,42 +1,49 @@
-#Pkg.add("CSV");
-#Pkg.add("DataFrames");
-
-using DataFrames;
-using CSV;
-
+using JuMP
+#using CPLEX
+#using ConditionalJuMP
+using Gurobi
+using StatsBase
+using DataFrames
+using CSV
+include("SupportFunction.jl")
+include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
+#Esben's path
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
-#All on monthly data
-mainData = CSV.read("AmesHousingModClean.csv"; delim = ';')
-#mainData = CSV.read("AmesHousingMod.csv")
+path = "$(homedir())/Documents/GitHub/Thesis/Data"
+
+
+#Skipper's path
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+
+#mainData = loadHousingData(path)
+#mainData = loadCPUData(path)
+mainData = loadElevatorData(path)
 
 dataSize = size(mainData)
-nColsMain = dataSize[2]
-nRowsMain = dataSize[1]
 colNames = names(mainData)
 
-nColsMain = size(mainData)[2]
 #Converting it into a datamatrix instead of a dataframe
-mainData2 = Array(mainData[2:nRowsMain, 1:nColsMain])
-#stringMatrix = Array(mainData[2:nRowsMain,1:(nColsMain)])
-#dataMatrixMain = parse.(Float64, stringMatrix)
-
-using JuMP
-using CPLEX
-
-combinedData = copy(mainData2)
-nCols = size(combinedData)[2]
+combinedData = Array(mainData)
 nRows = size(combinedData)[1]
+nCols = size(combinedData)[2]
 
-m = Model(solver = CplexSolver())
+### STAGE 1 ###
+println("STAGE 1 INITIATED")
+#Define solve
+m = Model(solver = GurobiSolver())
+
+#Add binary variables variables
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
-
+#Calculate highly correlated matix
 HC = cor(combinedData)
 
+#Define objective function
 @objective(m, Max, sum(z[i] for i=1:length(z)))
 
+#Define max correlation and constraints
 rho = 0.8
 for i=1:length(z)
 	for j=1:length(z)
@@ -47,77 +54,179 @@ for i=1:length(z)
 		end
 	end
 end
-#@constraint(m, z[2] + z[3] <= 1)
 
-print(m)
+#Print model
+#print(m)
 
+#Get solution status
 status = solve(m)
 
-println("Objective value: ", getobjectivevalue(m))
+#Get objective value
+println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
-zSolved = getvalue(z)
-length(zSolved)
-for i=1:length(zSolved)
-	if zSolved[i]==0
-		println("z[$i] = 0")
-	end
-end
+
+#Get solution value
+#zSolved = getvalue(z)
 println("STAGE 1 DONE")
+
+### STAGE 2 ###
 println("STAGE 2 INITIATED")
-using StatsBase
+println("Standardizing data")
 
-y = combinedData[1:250,nColsMain]
-X = combinedData[1:250,1:nColsMain-1]
+#Split data by X and y
+y = combinedData[:,nCols]
+X = combinedData[:,1:nCols-1]
+
+# TRANSFORMATIONS ###
+X = expandWithTransformations(X)
+
+# Standardize
+standX = zScoreByColumn(X)
 standY = zscore(y)
-standX = zscore(X)
 
-bCols = size(X)[2]
+#Initialise values for check later
+kValue = []
+RsquaredValue = []
+bSolved = []
+warmStartBeta = []
+warmstartZ = []
+HC = cor(X)
+for i in 7:7#:5:kmax
+	println("Setup model")
+	#Define parameters and model
+	bCols = size(X)[2]
 
-z = 0
-b = 0
-stage2Model = Model(solver = CplexSolver())
-bigM = 10000
-gamma = 10
-@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
-@variable(stage2Model, b[1:bCols])
-@variable(stage2Model, T)
-#@variable(stage2Model, O)
+	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+	gamma = 10
 
+	consplit = 10
+	#Define variables
+	@variable(stage2Model, b[1:bCols])
 
-@objective(stage2Model, Min, T)
-@constraint(stage2Model, norm(standY - standX*b) <= T)
+	@variable(stage2Model, T)
+	#@variable(stage2Model, T[1:consplit])
+	#Define binary variable (5b)
+	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+	#@variable(stage2Model, O)
 
-for i=1:bCols
-	@constraint(stage2Model, -bigM*z[i] <= b[i])
-	@constraint(stage2Model, b[i] <= bigM*z[i])
-end
-
-@constraint(stage2Model, sum(z[i] for i=1:bCols) <= kmax)
-
-#=
-@variable(stage2Model, v[1:bCols])
-for i=1:bCols
-	@constraint(stage2Model, b[i]  <= v[i])
-	@constraint(stage2Model, -b[i] <= v[i])
-end
-
-@constraint(stage2Model, sum(v[i] for i=1:bCols) <= O)
-=#
-
-
-#print(stage2Model)
-
-status = solve(stage2Model)
-
-println("Objective value: ", getobjectivevalue(stage2Model))
-bSolved = getvalue(b)
-for i=1:length(b)
-	if b[i]!=0
-		println("b[$i] = ", bSolved[i])
+	println("Calculating warmstart solution")
+	#Calculate warmstart
+	warmStartError = 1e6
+	for j in 1:5
+		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
+		tempError = norm(standY- standX*warmStartBetaTemp)^2
+		println("Iteration $j of 5: Warmstart error is:", tempError)
+		if tempError < warmStartError
+			warmStartError = copy(tempError)
+			warmStartBeta = copy(warmStartBetaTemp)
+			println("Iteration $j of 5: Changed warmstartBeta")
+		end
 	end
-end
 
+	println("Warmstart error is:", warmStartError)
+
+	#Set warmstart values
+	warmstartZ = zeros(warmStartBeta)
+	for j in 1:bCols
+		setvalue(b[j], warmStartBeta[j])
+		if isequal(warmStartBeta[j],0)
+			setvalue(z[j], 0)
+		else
+			setvalue(z[j], 1)
+			warmstartZ[j] = 1
+		end
+	end
+
+	#Calculating bigM
+	tau = 2
+	bigM = tau*norm(warmStartBeta, Inf)
+
+	#Define objective function (5a)
+	@objective(stage2Model, Min, T)#sum(T[j] for j= 1:consplit))
+
+	println("Trying to implement new constraint")
+	#@constraint(stage2Model, norm(standY - standX*b) <= T)
+
+
+
+
+	expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
+	for l=2:nRows
+		tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
+		append!(expr, tempExpr)
+		println("Constraint $l added")
+	end
+	println("Successfully added quadratic constraints")
+	@constraint(stage2Model, expr <= T)
+
+	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j=1:nRows) <= T)
+
+	#=
+	for k = 1:(consplit-1)
+			@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+(k-1)*floor(nRows/consplit)):Int64(floor(nRows/consplit)+(k-1)*floor(nRows/consplit))) <=   T[k])
+			println("Constraint $k added")
+	end
+	=#
+	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
+
+	println("Implemented new constraints")
+
+	#@constraint(stage2Model, 1 <=T)
+	#Define constraints (5c)
+	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
+	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
+
+	#Define kmax constraint (5d)
+	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
+
+	#Constraint 5f - can only select one of a pair of highly correlated features
+	rho = 0.8
+	for k=1:bCols
+		for j=1:bCols
+			if k != j
+				if HC[k,j] >= rho
+					@constraint(stage2Model,z[k]+z[j] <= 1)
+
+					#Check for errors in warmstart
+					if warmstartZ[j] + warmstartZ[k] > 1
+						println("Error with index $j and $k in constraingt 5f")
+					end
+				end
+			end
+		end
+	end
+
+	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+	for j=1:(nCols-1)
+		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
+
+		#Check for errors in warmstart
+		if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
+			println("Error with index $j in constraingt 5g")
+		end
+	end
+
+	#Set kMax rhs constraint
+	JuMP.setRHS(kMaxConstr, i)
+	println("Starting to solve stage 2 model with kMax = $i")
+
+	#print(stage2Model)
+
+	#Solve Stage 2 model
+	status = solve(stage2Model)
+	println("Objective value: ", getobjectivevalue(stage2Model))
+
+	#Get solution and calculate R^2
+	bSolved = getvalue(b)
+	zSolved = getvalue(z)
+	Rsquared = getRSquared(standX,standY,bSolved)
+	push!(kValue, i)
+	push!(RsquaredValue, Rsquared)
+	println("Rsquared value is: $Rsquared for kMax = $i")
+
+	#printNonZeroValues(bSolved)
+end
 println("STAGE 2 DONE")
-SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-Rsquared = 1-(getobjectivevalue(stage2Model))/SSTO
-#Rsquared = (getobjectivevalue(stage2Model)-getvalue(O)*gamma)/SSTO
+bestRsquared = maximum(RsquaredValue)
+kBestSol = kValue[indmax(RsquaredValue)]
+println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
