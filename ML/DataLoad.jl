@@ -18,5 +18,8 @@ function loadElevatorData(path)
     mainData = CSV.read("Elevators/elevators.data", header=["climbRate", "Sgz", "p", "q", "curRoll", "absRoll", "diffClb",
     	"diffRollRate", "diffDiffClb", "SaTime1", "SaTime2", "SaTime3", "SaTime4", "diffSaTime1", "diffSaTime2",
     	"diffSaTime3", "diffSaTime4", "Sa", "Goal"], datarow=1, nullable=false)
-    return mainData
+    testData = CSV.read("Elevators/elevators.test", header=["climbRate", "Sgz", "p", "q", "curRoll", "absRoll", "diffClb",
+    	"diffRollRate", "diffDiffClb", "SaTime1", "SaTime2", "SaTime3", "SaTime4", "diffSaTime1", "diffSaTime2",
+    	"diffSaTime3", "diffSaTime4", "Sa", "Goal"], datarow=1, nullable=false)
+    return mainData, testData
 end

@@ -125,9 +125,9 @@ end
 Function to that returns the R^2 value
 """
 function getRSquared(X,y,betaSolve)
-    SSres = sum((y[i] - sum(X[i,j]*betaSolve[j] for j=1:size(X)[2]))^2 for i=1:length(y))
+    SSres = sum((y[i] - X[i,:]'*betaSolve)^2 for i=1:length(y))
     SSTO = sum((y[i]-mean(y))^2 for i=1:length(y))
-    Rsquared = 1-(SSres)/SSTO
+    Rsquared = 1-SSres/SSTO
     return Rsquared
 end
 
