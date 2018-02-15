@@ -23,6 +23,7 @@ mainData = loadElevatorData(path)
 
 dataSize = size(mainData)
 colNames = names(mainData)
+colPredNames = colNames[1:18]
 
 #Converting it into a datamatrix instead of a dataframe
 combinedData = Array(mainData)
@@ -84,6 +85,23 @@ X = expandWithTransformations(X)
 standX = zScoreByColumn(X)
 standY = zscore(y)
 
+type NodeData
+	time::UInt64  # in nanoseconds
+	node::Int
+	obj::Float64
+	bestbound::Float64
+end
+
+function infocallback(cb)
+	node      = MathProgBase.cbgetexplorednodes(cb)
+	println("INFO 1: ", node)
+	obj       = MathProgBase.cbgetobj(cb)
+	println("INFO 2: ", obj)
+	bestbound = MathProgBase.cbgetbestbound(cb)
+	println("INFO 3: ", bestbound)
+	push!(bbdata, NodeData(time_ns(),node,obj,bestbound))
+end
+
 function solveForBeta(x, y, k)
 	standX = copy(x)
 	X = copy(x)
@@ -101,7 +119,7 @@ function solveForBeta(x, y, k)
 		#Define parameters and model
 		bCols = size(X)[2]
 
-		stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+		stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200, LogFile = "foo.txt"))
 		gamma = 10
 
 		consplit = 10
@@ -215,9 +233,25 @@ function solveForBeta(x, y, k)
 
 		#print(stage2Model)
 
+		#INFORMATION CALLBACK
+		bbdata = NodeData[]
+		addinfocallback(stage2Model, infocallback, when = :MIPInfo)
+
+
+
 		#Solve Stage 2 model
 		status = solve(stage2Model)
 		println("Objective value: ", getobjectivevalue(stage2Model))
+		println("BBDATA: ", bbdata)
+		# Save results to file for analysis later
+		open("bbtrack.csv","w") do fp
+		    println(fp, "time,node,obj,bestbound")
+		    for bb in bbdata
+		        println(fp, bb.time, ",", bb.node, ",",
+		                    bb.obj, ",", bb.bestbound)
+		    end
+		end
+
 
 		#Get solution and calculate R^2
 		bSolved = getvalue(b)
@@ -236,7 +270,9 @@ function solveForBeta(x, y, k)
 
 	return bSolved
 end
-
+bbdata = NodeData[]
+bSolution = solveForBeta(standX, standY, 9)
+identifyParameters(bSolution, colPredNames)
 sampleSize = 50
 bCols = size(X)[2]
 bSample = Matrix(sampleSize, bCols)
@@ -259,21 +295,20 @@ function selectSampleRows(rowsWanted, nRows)
 	return rowsSelected
 end
 
-for i=1:sampleSize
-	sampleRows = selectSampleRows(100, nRows)
-	sampleX = createSampleX(standX, sampleRows)
-	sampleY = createSampleY(standY, sampleRows)
-	bSample[i,:] = solveForBeta(sampleX, sampleY, 9)
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample)
+	for i=1:sampleSize
+		sampleRows = selectSampleRows(rowsPerSample, nRows)
+		sampleX = createSampleX(standX, sampleRows)
+		sampleY = createSampleY(standY, sampleRows)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k)
+	end
 end
+
+createBetaDistribution(bSample, standX, standY, 9, sampleSize, 200)
+
 
 using Bootstrap
 n_boot = 1000
-samples = convert(Array{Float64, 1}, bSample[:,3])
-bs1 = bootstrap(samples, mean, BasicSampling(n_boot))
-bsSe = bootstrap(samples, std, BalancedSampling(n_boot))
-
-sd1 = Float64(0.10724)
-cil = 0.99
 bSample = convert(Array{Float64}, bSample)
 function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
 	bSamples = convert(Array{Float64}, sampleInput)
@@ -311,13 +346,13 @@ function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResul
 			significance[i] = 0.90
 		else
 			significance[i] = 0
+			println("BooHoo")
 		end
 	end
 	return significance
 end
 
-sig = zeros(72)
-sig[20]
+bSolution = solveForBeta(standX, standY, 9)
 signi = testSignificance(confArray99, confArray95, confArray90, bSample[1,:])
 for i=1:72
 	if signi[i] > 0

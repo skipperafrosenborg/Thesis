@@ -190,3 +190,45 @@ function expandWithTransformations(X)
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
 end
+
+
+"""
+Function to identify which parameters have been selected (transformed or not)
+"""
+function identifyParameters(betaSolution, colNames)
+	originalColumns = Int64(length(betaSolution)/4)
+	# test original parameters
+	count = 1
+	for i=1:originalColumns
+		if !isequal(betaSolution[i],0)
+			println("Parameter '", colNames[count],"' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+
+	# test for squared
+	count = 1
+	for i=(originalColumns+1):(2*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter '", colNames[count],"^2' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+
+	# test for natural log
+	count = 1
+	for i=(originalColumns*2+1):(3*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter 'ln(", colNames[count],")' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+	# test for sqrt
+	count = 1
+	for i=(originalColumns*3+1):(4*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter 'sqrt(", colNames[count],")' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+end
