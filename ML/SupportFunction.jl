@@ -26,8 +26,6 @@ function shrinkValuesH(betaVector, kMax, HCArray)
 	#Create zeroVector
 	zeroVector = zeros(betaVector)
 
-    #If any found, set value to 0 and continue
-
 	for i in 1:kMax
 		#Find index of maximum value in absolute vector
 		ind = indmax(absCopy)
@@ -111,6 +109,8 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
+
+		#println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
 			println("Iteration $iter with error on $curError")
