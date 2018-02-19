@@ -231,3 +231,23 @@ function identifyParameters(betaSolution, colNames)
 		count += 1
 	end
 end
+
+"""
+Functions to make a split in data
+"""
+function createSampleX(x, inputRows)
+	inputX = copy(x)
+	outputX = inputX[inputRows,:]
+	return outputX
+end
+
+function createSampleY(y, inputRows)
+	inputY = copy(y)
+	outputY = inputY[inputRows,:]
+	return outputY
+end
+
+function selectSampleRows(rowsWanted, nRows)
+	rowsSelected = rand(1:nRows, rowsWanted)
+	return rowsSelected
+end
