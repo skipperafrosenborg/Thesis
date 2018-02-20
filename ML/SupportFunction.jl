@@ -125,9 +125,9 @@ end
 Function to that returns the R^2 value
 """
 function getRSquared(X,y,betaSolve)
-    SSres = sum((y[i] - sum(X[i,j]*betaSolve[j] for j=1:size(X)[2]))^2 for i=1:length(y))
+    SSres = sum((y[i] - X[i,:]'*betaSolve)^2 for i=1:length(y))
     SSTO = sum((y[i]-mean(y))^2 for i=1:length(y))
-    Rsquared = 1-(SSres)/SSTO
+    Rsquared = 1-SSres/SSTO
     return Rsquared
 end
 
@@ -164,8 +164,10 @@ function expandWithTransformations(X)
 	for i=1:xCols
 		insertArray = []
 		for j=1:xRows
-			if count(k->(k<=0), expandedX[j,i]) > 0
+			if count(k->(k<0), expandedX[j,i]) > 0
 				push!(insertArray, 0)
+			elseif count(k->(k==0), expandedX[j,i]) > 0
+				push!(insertArray, log(expandedX[j,i]+0.00001))
 			else
 				push!(insertArray, log(expandedX[j,i]))
 			end
@@ -190,7 +192,6 @@ function expandWithTransformations(X)
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
 end
-
 
 """
 Function to identify which parameters have been selected (transformed or not)
@@ -231,4 +232,43 @@ function identifyParameters(betaSolution, colNames)
 		end
 		count += 1
 	end
+end
+
+"""
+Functions to make a split in data
+"""
+function createSampleX(x, inputRows)
+	inputX = copy(x)
+	outputX = inputX[inputRows,:]
+	return outputX
+end
+
+function createSampleY(y, inputRows)
+	inputY = copy(y)
+	outputY = inputY[inputRows,:]
+	return outputY
+end
+
+function selectSampleRows(rowsWanted, nRows)
+	rowsSelected = sample(1:nRows, rowsWanted, replace = false)
+	return rowsSelected
+end
+
+function selectSampleRowsWR(rowsWanted, nRows)
+	rowsSelected = rand(1:nRows, rowsWanted)
+	return rowsSelected
+end
+
+function splitDataIn2(data, rowsWanted, nRows)
+	rowsOne = selectSampleRows(rowsWanted, nRows)
+	rowsTwo = []
+	for i = 1:nRows
+		if !(i in rowsOne)
+			push!(rowsTwo, i)
+		end
+	end
+	dataSplitOne = data[rowsOne, :]
+	dataSplitTwo = data[rowsTwo, :]
+
+	return dataSplitOne, dataSplitTwo
 end

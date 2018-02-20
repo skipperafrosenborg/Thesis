@@ -5,7 +5,8 @@ using Gurobi
 using StatsBase
 using DataFrames
 using CSV
-include("SupportFunction.jl")
+
+@everywhere include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
@@ -13,21 +14,31 @@ println("Leeeeroooy Jenkins")
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
-
 #Skipper's path
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
-#mainData = loadHousingData(path)
+mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-mainData = loadElevatorData(path)
 
+mainDataArray = Array(mainData)
+mainRows = size(mainDataArray)[1]
+splitRows = Int64(ceil(mainRows/2))
+train, test = splitDataIn2(mainDataArray, splitRows, mainRows)
+
+trainingData = Array(train)
+testData = Array(test)
+nRows = size(trainingData)[1]
+nCols = size(trainingData)[2]
+
+#=
+mainData, testData = loadElevatorData(path)
 dataSize = size(mainData)
 colNames = names(mainData)
-
-#Converting it into a datamatrix instead of a dataframe
-combinedData = Array(mainData)
-nRows = size(combinedData)[1]
-nCols = size(combinedData)[2]
+trainingData = Array(mainData)
+testData = Array(testData)
+nRows = size(trainingData)[1]
+nCols = size(trainingData)[2]
+=#
 
 ### STAGE 1 ###
 println("STAGE 1 INITIATED")
@@ -38,7 +49,7 @@ m = Model(solver = GurobiSolver())
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
 #Calculate highly correlated matix
-HC = cor(combinedData)
+HC = cor(trainingData)
 
 #Define objective function
 @objective(m, Max, sum(z[i] for i=1:length(z)))
@@ -74,159 +85,252 @@ println("STAGE 2 INITIATED")
 println("Standardizing data")
 
 #Split data by X and y
-y = combinedData[:,nCols]
-X = combinedData[:,1:nCols-1]
+y = trainingData[:,nCols]
+X = trainingData[:,1:nCols-1]
+yTest = testData[:,nCols]
+XTest = testData[:,1:nCols-1]
 
 # TRANSFORMATIONS ###
 X = expandWithTransformations(X)
+XTest = expandWithTransformations(XTest)
 
 # Standardize
-standX = zScoreByColumn(X)
-standY = zscore(y)
+@everywhere standX = zScoreByColumn(X)
+@everywhere standY = zscore(y)
+standXTest = zScoreByColumn(XTest)
+standYTest = zscore(yTest)
+
+# Output for Lasso regression in R
+#=
+writedlm("Elevators/elevatorXTrain.CSV",standX,",")
+writedlm("Elevators/elevatorYTrain.CSV",standY,",")
+writedlm("Elevators/elevatorXTest.CSV",standXTest,",")
+writedlm("Elevators/elevatorYTest.CSV",standYTest,",")
+=#
 
 #Initialise values for check later
+bCols = size(X)[2]
 kValue = []
 RsquaredValue = []
 bSolved = []
+bestBeta = []
 warmStartBeta = []
 warmstartZ = []
-HC = cor(X)
-for i in 7:7#:5:kmax
-	println("Setup model")
-	#Define parameters and model
-	bCols = size(X)[2]
 
-	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
-	gamma = 10
+startIter = 1
+stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+totalExpr = @expression(stage2Model, 0)
+@everywhere HC = cor(X)
+@everywhere bigM = 0
+@everywhere tau = 2
 
-	consplit = 10
-	#Define variables
-	@variable(stage2Model, b[1:bCols])
+function getBigM(i)
+	warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC)
+	bigMTemp = tau*norm(warmStartBetaTemp, Inf)
+	println("Calculated big M iteration $i/$kmax")
+	return i, bigMTemp
+end
 
-	@variable(stage2Model, T)
-	#@variable(stage2Model, T[1:consplit])
-	#Define binary variable (5b)
-	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
-	#@variable(stage2Model, O)
 
-	println("Calculating warmstart solution")
-	#Calculate warmstart
-	warmStartError = 1e6
-	for j in 1:5
-		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-6, i, HC)
-		tempError = norm(standY- standX*warmStartBetaTemp)^2
-		println("Iteration $j of 5: Warmstart error is:", tempError)
-		if tempError < warmStartError
-			warmStartError = copy(tempError)
-			warmStartBeta = copy(warmStartBetaTemp)
-			println("Iteration $j of 5: Changed warmstartBeta")
+@time(test = pmap(getBigM, Array(1:1)))
+
+@time(for i in 1:1
+	getBigM(i)
+end
+)
+SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
+amountOfGammas = 5
+#Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
+gamma = logspace(0, log10(SSTO), amountOfGammas)
+
+
+for g in 1:1:amountOfGammas
+	for i in startIter:1:kmax
+		if i == startIter
+			println("Setup model")
+			#Define parameters and model
+			stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
+			gamma = 10
+
+			#Define variables
+			@variable(stage2Model, b[1:bCols])
+			@variable(stage2Model, v[1:bCols]) # auxiliary variables for abs
+			@variable(stage2Model, T) # First objective term
+			@variable(stage2Model, G) #Second objective term
+
+			#Define binary variable (5b)
+			@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+
+			#Define objective function (5a)
+			@objective(stage2Model, Min, T + G)
 		end
-	end
 
-	println("Warmstart error is:", warmStartError)
-
-	#Set warmstart values
-	warmstartZ = zeros(warmStartBeta)
-	for j in 1:bCols
-		setvalue(b[j], warmStartBeta[j])
-		if isequal(warmStartBeta[j],0)
-			setvalue(z[j], 0)
-		else
-			setvalue(z[j], 1)
-			warmstartZ[j] = 1
+		println("Calculating warmstart solution")
+		#Calculate warmstart
+		warmStartError = 1e6
+		for j in 1:5
+			warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC)
+			tempError = norm(standY- standX*warmStartBetaTemp)^2
+			println("Iteration $j of 5: Warmstart error is:", tempError)
+			if tempError < warmStartError
+				warmStartError = copy(tempError)
+				warmStartBeta = copy(warmStartBetaTemp)
+				println("Iteration $j of 5: Changed warmstartBeta")
+			end
 		end
-	end
 
-	#Calculating bigM
-	tau = 2
-	bigM = tau*norm(warmStartBeta, Inf)
-
-	#Define objective function (5a)
-	@objective(stage2Model, Min, T)#sum(T[j] for j= 1:consplit))
-
-	println("Trying to implement new constraint")
-	#@constraint(stage2Model, norm(standY - standX*b) <= T)
+		println("Warmstart error is:", warmStartError)
 
 
+		#Set warmstart values
+		warmstartZ = zeros(warmStartBeta)
+		for j in 1:bCols
+			setvalue(b[j], warmStartBeta[j])
+			if isequal(warmStartBeta[j],0)
+				setvalue(z[j], 0)
+			else
+				setvalue(z[j], 1)
+				warmstartZ[j] = 1
+			end
+		end
+
+		if i == startIter
+			println("Trying to implement new constraint")
+			xSquareExpr = @expression(stage2Model, 0*b[1]^2)
+			for l = 1:bCols
+		   		coef = 0
+		   		for j = 1:nRows
+		           coef += standX[j,l]^(2)
+			    end
+		   		append!(xSquareExpr, @expression(stage2Model, coef*b[l]^2))
+			end
+			println("Implemented x^2")
+
+			ySquaredExpr = @expression(stage2Model, 0*b[1])
+			for j = 1:nRows
+		   		append!(ySquaredExpr,@expression(stage2Model, standY[j,1]^2))
+			end
+			print(ySquaredExpr)
+			println("Implemented y^2")
+
+			simpleBetaExpr = @expression(stage2Model, 0*b[1])
+			for l = 1:bCols
+		    	coef = 0
+		    	for j = 1:nRows
+		         	coef += -1*2*standX[j, l]*standY[j]
+		    	end
+		    	append!(simpleBetaExpr, @expression(stage2Model, coef*b[l]))
+			end
+			println("Implemented simpleBetaExpr")
+
+			crossBetaExpr = @expression(stage2Model, 0*b[1]*b[2])
+			iter = 1
+			for l = 1:bCols
+		    	for k = (l + 1):bCols
+		         	coef = 0
+		         	for j = 1:nRows
+		                coef += 2*standX[j,l]*standX[j,k]
+		         	end
+					append!(crossBetaExpr, @expression(stage2Model, coef*b[l,1]*b[k,1]))
+		    	end
+				println("Finished out loop of $l/$bCols")
+			end
+			println("Implemented crossBetaExpr")
+			totalExpr = @expression(stage2Model, crossBetaExpr+simpleBetaExpr+xSquareExpr+ySquaredExpr)
+			@constraint(stage2Model, totalExpr <= T)
+			println("Successfully added quadratic constraints")
 
 
-	expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
-	for l=2:nRows
-		tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
-		append!(expr, tempExpr)
-		println("Constraint $l added")
-	end
-	println("Successfully added quadratic constraints")
-	@constraint(stage2Model, expr <= T)
 
-	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j=1:nRows) <= T)
+			#Define constraints (5c)
+			@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
+			@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
 
-	#=
-	for k = 1:(consplit-1)
-			@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+(k-1)*floor(nRows/consplit)):Int64(floor(nRows/consplit)+(k-1)*floor(nRows/consplit))) <=   T[k])
-			println("Constraint $k added")
-	end
-	=#
-	#@constraint(stage2Model, sum((standY[j] - standX[j,:]'*b)^2 for j = Int64(1+floor(nRows/consplit)+(consplit-1)*floor(nRows/consplit)):Int64(nRows)) <=   T[consplit])
+			#Define kmax constraint (5d)
+			@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
 
-	println("Implemented new constraints")
+			#Constraint 5f - can only select one of a pair of highly correlated features
+			rho = 0.8
+			for k=1:bCols
+				for j=1:bCols
+					if k != j
+						if HC[k,j] >= rho
+							@constraint(stage2Model,z[k]+z[j] <= 1)
 
-	#@constraint(stage2Model, 1 <=T)
-	#Define constraints (5c)
-	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
-	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
-
-	#Define kmax constraint (5d)
-	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
-
-	#Constraint 5f - can only select one of a pair of highly correlated features
-	rho = 0.8
-	for k=1:bCols
-		for j=1:bCols
-			if k != j
-				if HC[k,j] >= rho
-					@constraint(stage2Model,z[k]+z[j] <= 1)
-
-					#Check for errors in warmstart
-					if warmstartZ[j] + warmstartZ[k] > 1
-						println("Error with index $j and $k in constraingt 5f")
+							#Check for errors in warmstart
+							if warmstartZ[j] + warmstartZ[k] > 1
+								println("Error with index $j and $k in constraingt 5f")
+							end
+						end
 					end
 				end
 			end
+
+			#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+			for j=1:(nCols-1)
+				@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
+
+				#Check for errors in warmstart
+				if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
+					println("Error with index $j in constraingt 5g")
+				end
+			end
+
+			#=
+			#Working for p<100
+			expr = @expression(stage2Model, (standY[1]-standX[1,:]'*b)^2)
+			for l=2:nRows
+				tempExpr = @expression(stage2Model, (standY[l]-standX[l,:]'*b)^2)
+				append!(expr, tempExpr)
+				#println("Constraint $l added")
+			end
+			@constraint(stage2Model, expr <= T)
+			=#
+
+			#Second objective term
+			#@constraint(stage2Model, 1*b .<= v)
+			#@constraint(stage2Model, -1*b .<= v)
+			#oneNorm = sum(v[i] for i=1:bCols)
+			#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
+			#@constraint(stage2Model, gammaConstr, G/oneNorm >= gamma[g])
 		end
-	end
 
-	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nCols-1)
-		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
+		#Set kMax rhs constraint
+		JuMP.setRHS(kMaxConstr, i)
 
-		#Check for errors in warmstart
-		if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
-			println("Error with index $j in constraingt 5g")
+		#Second objective term
+		#JuMP.setRHS(gammaConstr, gamma[g])
+
+		println("Starting to solve stage 2 model with kMax = $i")
+
+		#print(stage2Model)
+
+		#Solve Stage 2 model
+		status = solve(stage2Model)
+		println("Objective value: ", getobjectivevalue(stage2Model))
+
+		#Get solution and calculate R^2
+		bSolved = getvalue(b)
+		zSolved = getvalue(z)
+
+		#Out of sample test
+		Rsquared = getRSquared(standXTest,standYTest,bSolved)
+		#Rsquared = getRSquared(standX,standY,bSolved)
+		if any(Rsquared .> RsquaredValue) || isempty(RsquaredValue)
+			bestBeta = bSolved
+			#bestGamma = g
+			bestK = i
 		end
+		push!(kValue, i)
+		push!(RsquaredValue, Rsquared)
+		println("Rsquared value is: $Rsquared for kMax = $i and Gamma = $g")
+
+		#printNonZeroValues(bSolved)
 	end
-
-	#Set kMax rhs constraint
-	JuMP.setRHS(kMaxConstr, i)
-	println("Starting to solve stage 2 model with kMax = $i")
-
-	#print(stage2Model)
-
-	#Solve Stage 2 model
-	status = solve(stage2Model)
-	println("Objective value: ", getobjectivevalue(stage2Model))
-
-	#Get solution and calculate R^2
-	bSolved = getvalue(b)
-	zSolved = getvalue(z)
-	Rsquared = getRSquared(standX,standY,bSolved)
-	push!(kValue, i)
-	push!(RsquaredValue, Rsquared)
-	println("Rsquared value is: $Rsquared for kMax = $i")
-
-	#printNonZeroValues(bSolved)
 end
+
+println([kValue RsquaredValue])
 println("STAGE 2 DONE")
 bestRsquared = maximum(RsquaredValue)
 kBestSol = kValue[indmax(RsquaredValue)]
-println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
+println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol and gamma = $bestGamma")

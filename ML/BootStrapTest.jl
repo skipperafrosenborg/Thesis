@@ -19,8 +19,8 @@ path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-mainData = loadElevatorData(path)
-
+mainData, testdata = loadElevatorData(path)
+mainData
 dataSize = size(mainData)
 colNames = names(mainData)
 colPredNames = colNames[1:18]
@@ -70,7 +70,7 @@ kmax = getobjectivevalue(m)
 #zSolved = getvalue(z)
 println("STAGE 1 DONE")
 
-### STAGE 2 ###
+### STAGE 2 ###
 println("STAGE 2 INITIATED")
 println("Standardizing data")
 
@@ -165,8 +165,7 @@ function solveForBeta(x, y, k)
 		bigM = tau*norm(warmStartBeta, Inf)
 
 		#Define objective function (5a)
-		@objective(stage2Model, Min, T)#sum(T[j] for j= 1:consplit))
-
+		@objective(stage2Model, Min, T)
 		#@constraint(stage2Model, norm(standY - standX*b) <= T)
 
 
@@ -297,7 +296,7 @@ end
 
 function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample)
 	for i=1:sampleSize
-		sampleRows = selectSampleRows(rowsPerSample, nRows)
+		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
 		bSample[i,:] = solveForBeta(sampleX, sampleY, k)
@@ -306,7 +305,7 @@ end
 
 createBetaDistribution(bSample, standX, standY, 9, sampleSize, 200)
 
-
+println("HEJ SKIPPER!")
 using Bootstrap
 n_boot = 1000
 bSample = convert(Array{Float64}, bSample)
@@ -448,14 +447,12 @@ ci(bs1, BasicConfInt(cil)) #return t0, lower, upper
 
 #=
 bootstrapSE = std(samples,1)
-
 nullDistribution = samples
 pvalues = ones(rhoCols)
 for i=1:rhoCols
     nullDistribution[:,i] = nullDistribution[:,i]-mean(nullDistribution[:,i])
 end
 nullDistribution[:, rhoCols] = 1 + nullDistribution[:, rhoCols]
-
 pvalues = [mean(abs(MLE[i]).<abs(nullDistribution[:,i])) for i=1:rhoCols]
 for i=1:rhoCols
 	if pvalues[i] >= 0.05
