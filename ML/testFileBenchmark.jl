@@ -343,7 +343,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 	nRows = size(X)[1]
 	cuts = Matrix(0, bCols+1)
 	bZeros = zeros(bCols)
-	rowsPerSample = Int64(ceil(0.1*nRows)) #10% of rows in training data to generate beta estimates
+	rowsPerSample = nRows #All of rows in training data to generate beta estimates, but selected with replacement
 	totalSamples = 25 #25 different times we will get a beta estimate
 	nBoot = 1000
 	for i=1:3
