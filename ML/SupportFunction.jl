@@ -19,14 +19,11 @@ end
 Function an array with the kMax largest absolute values
 and all other values shrunk to 0
 """
-#NEED TO IMPLEMENT THAT QUADRATIC, LOG AND SQRT CAN'T BE SELECTED
 function shrinkValuesH(betaVector, kMax, HCArray)
 	#Make aboslute copy of betaVector
 	absCopy = copy(abs.(betaVector))
 	#Create zeroVector
 	zeroVector = zeros(betaVector)
-
-    #If any found, set value to 0 and continue
 
 	for i in 1:kMax
 		#Find index of maximum value in absolute vector
@@ -80,7 +77,7 @@ end
 Vanilla gradient decent which only keeps the kMax biggest values. All other
 values are shrunk to 0.
 """
-function gradDecent(X, y, L, epsilon, kMax, HC)
+function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
     HCArray = Matrix(0,2)
     rho = 0.8
     for k=1:size(X)[2]
@@ -93,7 +90,11 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
     	end
     end
 
-    betaVector = shrinkValuesH(rand(size(X)[2]),kmax, HCArray)
+	if countnz(bSolved) < 1
+		bSolved = rand(size(X)[2])
+	end
+
+    betaVector = shrinkValuesH(bSolved,kmax, HCArray)
 
 	#Initialise parameters
 	iter = 0
@@ -104,13 +105,15 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
 		oldBetaVector = copy(betaVector)
 
 		#Calculate delta(g(beta))
-		gradBeta = -X'*(y-X*betaVector)
+		gradBeta = X'*(y-X*betaVector)
 
 		#Shrink smalles values
-		betaVector = copy(shrinkValuesH(betaVector-1/L*gradBeta, kMax, HCArray))
+		betaVector = copy(shrinkValuesH(betaVector+1/L*gradBeta, kMax, HCArray))
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
+
+		println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
 			println("Iteration $iter with error on $curError")
@@ -271,4 +274,40 @@ function splitDataIn2(data, rowsWanted, nRows)
 	dataSplitTwo = data[rowsTwo, :]
 
 	return dataSplitOne, dataSplitTwo
+end
+
+"""
+Type that allows us to track solution progress (time, nodes searched, objective and bestbound)
+"""
+type NodeData
+    time::Float64  # in seconds since the epoch
+    node::Int
+    obj::Float64
+    bestbound::Float64
+end
+
+"""
+Function that allows us to push information into the type NodeData
+"""
+function infocallback(cb)
+	node      = MathProgBase.cbgetexplorednodes(cb)
+	#println("INFO 1, nodes visited: ", node)
+	obj       = MathProgBase.cbgetobj(cb)
+	#println("INFO 2, objective is: ", obj)
+	bestbound = MathProgBase.cbgetbestbound(cb)
+	#println("INFO 3, best bound is: ", bestbound)
+	push!(bbdata, NodeData(time_ns(),node,obj,bestbound))
+end
+
+"""
+Function that converts a NodeData type into a csv file in the working directory
+"""
+function printSolutionToCSV(stringName, bbdata)
+	open(stringName,"w") do fp
+		println(fp, "time,node,obj,bestbound")
+		for bb in bbdata
+			println(fp, round(bb.time,4), ",", round(bb.node,2), ",",
+						round(bb.obj,2), ",", round(bb.bestbound,2))
+		end
+	end
 end

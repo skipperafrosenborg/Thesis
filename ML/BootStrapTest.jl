@@ -9,6 +9,15 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
+type NodeData
+    time::Float64  # in seconds since the epoch
+    node::Int
+    obj::Float64
+    bestbound::Float64
+end
+
+bbdata = NodeData[]
+
 #Esben's path
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 path = "$(homedir())/Documents/GitHub/Thesis/Data"
@@ -19,11 +28,12 @@ path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-mainData, testdata = loadElevatorData(path)
+mainData = loadElevatorData(path)
 mainData
 dataSize = size(mainData)
 colNames = names(mainData)
 colPredNames = colNames[1:18]
+
 
 #Converting it into a datamatrix instead of a dataframe
 combinedData = Array(mainData)
@@ -34,7 +44,7 @@ nCols = size(combinedData)[2]
 println("STAGE 1 INITIATED")
 #Define solve
 m = Model(solver = GurobiSolver())
-
+addinfocallback(m, infocallback, when = :Other)
 #Add binary variables variables
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
@@ -62,6 +72,13 @@ end
 #Get solution status
 status = solve(m)
 
+open("bbtrack2.csv","w") do fp
+    println(fp, "time,node,obj,bestbound")
+    for bb in bbdata
+        println(fp, bb.time, ",", bb.node, ",",bb.obj, ",", bb.bestbound)
+    end
+end
+
 #Get objective value
 println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
@@ -85,12 +102,7 @@ X = expandWithTransformations(X)
 standX = zScoreByColumn(X)
 standY = zscore(y)
 
-type NodeData
-	time::UInt64  # in nanoseconds
-	node::Int
-	obj::Float64
-	bestbound::Float64
-end
+
 
 function infocallback(cb)
 	node      = MathProgBase.cbgetexplorednodes(cb)
@@ -234,7 +246,7 @@ function solveForBeta(x, y, k)
 
 		#INFORMATION CALLBACK
 		bbdata = NodeData[]
-		addinfocallback(stage2Model, infocallback, when = :MIPInfo)
+		addinfocallback(stage2Model, infocallback, when = :MIPNode)
 
 
 
@@ -242,14 +254,7 @@ function solveForBeta(x, y, k)
 		status = solve(stage2Model)
 		println("Objective value: ", getobjectivevalue(stage2Model))
 		println("BBDATA: ", bbdata)
-		# Save results to file for analysis later
-		open("bbtrack.csv","w") do fp
-		    println(fp, "time,node,obj,bestbound")
-		    for bb in bbdata
-		        println(fp, bb.time, ",", bb.node, ",",
-		                    bb.obj, ",", bb.bestbound)
-		    end
-		end
+
 
 
 		#Get solution and calculate R^2
@@ -271,6 +276,15 @@ function solveForBeta(x, y, k)
 end
 bbdata = NodeData[]
 bSolution = solveForBeta(standX, standY, 9)
+# Save results to file for analysis later
+open("bbtrack.csv","w") do fp
+	println(fp, "time,node,obj,bestbound")
+	for bb in bbdata
+		println(fp, round(bb.time,4), ",", round(bb.node,2), ",",
+					round(bb.obj,2), ",", round(bb.bestbound,2))
+	end
+end
+
 identifyParameters(bSolution, colPredNames)
 sampleSize = 50
 bCols = size(X)[2]
