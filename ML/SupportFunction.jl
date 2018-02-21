@@ -311,3 +311,86 @@ function printSolutionToCSV(stringName, bbdata)
 		end
 	end
 end
+
+"""
+Generating samplesize amount of beta-values for a beta distribution
+"""
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma)
+	for i=1:sampleSize
+		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
+		sampleX = createSampleX(standX, sampleRows)
+		sampleY = createSampleY(standY, sampleRows)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma)
+		println("Sample $i/$sampleSize is done")
+	end
+end
+
+function solveForBeta(X, Y, k, gamma)
+	stage2Model = buildStage2(X, Y, k)
+
+	#Set kMax rhs constraint
+	curLB = Gurobi.getconstrUB(stage2Model) #Get current UBbounds
+	curLB[bCols*4+2] = k #Change upperbound in current bound vector
+	Gurobi.setconstrUB!(stage2Model, curLB) #Push bound vector to model
+	Gurobi.updatemodel!(stage2Model)
+
+	#Set new Big M
+	newBigM = 3#tau*norm(warmStartBeta, Inf)
+	changeBigM(stage2Model,newBigM)
+
+	changeGamma(stage2Model, gamma)
+
+	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
+	#Solve Stage 2 model
+	status = Gurobi.optimize!(stage2Model)
+	println("Objective value: ", Gurobi.getobjval(stage2Model))
+
+	sol = Gurobi.getsolution(stage2Model)
+	#Get solution and calculate R^2
+	bSolved = sol[1:bCols]
+	return bSolved
+end
+
+"""
+Creates a confidence interval based on confidence interval level and nBoot
+bootstrapped samples from the created beta distribution
+"""
+function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
+	bSample = convert(Array{Float64}, sampleInput)
+	bCols = size(bSample)[2]
+	confIntArray = Matrix(2, bCols)
+	for i=1:bCols
+		bs = bootstrap(bSample[:,i], mean, BasicSampling(nBoot))
+		cil = confLevel
+		CiEst = ci(bs, BasicConfInt(cil))
+		confIntArray[1,i] = CiEst[1][2] #lower
+		confIntArray[2,i] = CiEst[1][3]
+	end
+	return confIntArray
+end
+"""
+Based on the confidence intervals created, significance of found parameters can
+be tested with this function
+"""
+function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResult)
+	bCols = size(bResult)[1]
+	significance = zeros(bCols)
+	for i=1:bCols
+		if bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[1,i] > 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[2,i] < 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[1,i] > 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[2,i] < 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[1,i] > 0
+			significance[i] = 0.90
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[2,i] < 0
+			significance[i] = 0.90
+		else
+			significance[i] = 0
+		end
+	end
+	return significance
+end
