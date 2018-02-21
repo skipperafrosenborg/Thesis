@@ -19,7 +19,6 @@ end
 Function an array with the kMax largest absolute values
 and all other values shrunk to 0
 """
-#NEED TO IMPLEMENT THAT QUADRATIC, LOG AND SQRT CAN'T BE SELECTED
 function shrinkValuesH(betaVector, kMax, HCArray)
 	#Make aboslute copy of betaVector
 	absCopy = copy(abs.(betaVector))
@@ -78,7 +77,7 @@ end
 Vanilla gradient decent which only keeps the kMax biggest values. All other
 values are shrunk to 0.
 """
-function gradDecent(X, y, L, epsilon, kMax, HC)
+function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
     HCArray = Matrix(0,2)
     rho = 0.8
     for k=1:size(X)[2]
@@ -91,7 +90,11 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
     	end
     end
 
-    betaVector = shrinkValuesH(rand(size(X)[2]),kmax, HCArray)
+	if countnz(bSolved) < 1
+		bSolved = rand(size(X)[2])
+	end
+
+    betaVector = shrinkValuesH(bSolved,kmax, HCArray)
 
 	#Initialise parameters
 	iter = 0
@@ -102,15 +105,15 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
 		oldBetaVector = copy(betaVector)
 
 		#Calculate delta(g(beta))
-		gradBeta = -X'*(y-X*betaVector)
+		gradBeta = X'*(y-X*betaVector)
 
 		#Shrink smalles values
-		betaVector = copy(shrinkValuesH(betaVector-1/L*gradBeta, kMax, HCArray))
+		betaVector = copy(shrinkValuesH(betaVector+1/L*gradBeta, kMax, HCArray))
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
 
-		#println("Iteration $iter, error $curError")
+		println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
 			println("Iteration $iter with error on $curError")
