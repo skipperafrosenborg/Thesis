@@ -408,7 +408,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 
 			# test significance
-			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
