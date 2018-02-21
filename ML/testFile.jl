@@ -390,7 +390,7 @@ createBetaDistribution(bSample, standX, standY, 9, sampleSize, 200)
 
 println("HEJ SKIPPER!")
 using Bootstrap
-n_boot = 1000
+nBoot = 1000
 bSample = convert(Array{Float64}, bSample)
 function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
 	bSamples = convert(Array{Float64}, sampleInput)

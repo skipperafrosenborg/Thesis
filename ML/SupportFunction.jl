@@ -113,10 +113,10 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
 
-		println("Iteration $iter, error $curError")
+		#println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
-			println("Iteration $iter with error on $curError")
+			#println("Iteration $iter with error on $curError")
 		end
 	end
 	#println("End error: $curError")
@@ -310,4 +310,62 @@ function printSolutionToCSV(stringName, bbdata)
 						round(bb.obj,2), ",", round(bb.bestbound,2))
 		end
 	end
+end
+
+
+"""
+Generating samplesize amount of beta-values for a beta distribution
+"""
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample)
+	for i=1:sampleSize
+		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
+		sampleX = createSampleX(standX, sampleRows)
+		sampleY = createSampleY(standY, sampleRows)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k)
+		println("Sample $i/$sampleSize is done")
+	end
+end
+
+"""
+Creates a confidence interval based on confidence interval level and nBoot
+bootstrapped samples from the created beta distribution
+"""
+function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
+	bSample = convert(Array{Float64}, sampleInput)
+	bCols = size(bSample)[2]
+	confIntArray = Matrix(2, bCols)
+	for i=1:bCols
+		bs = bootstrap(bSample[:,i], mean, BasicSampling(nBoot))
+		cil = confLevel
+		CiEst = ci(bs, BasicConfInt(cil))
+		confIntArray[1,i] = CiEst[1][2] #lower
+		confIntArray[2,i] = CiEst[1][3]
+	end
+	return confIntArray
+end
+"""
+Based on the confidence intervals created, significance of found parameters can
+be tested with this function
+"""
+function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResult)
+	bCols = size(bResult)[1]
+	significance = zeros(bCols)
+	for i=1:bCols
+		if bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[1,i] > 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[2,i] < 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[1,i] > 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[2,i] < 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[1,i] > 0
+			significance[i] = 0.90
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[2,i] < 0
+			significance[i] = 0.90
+		else
+			significance[i] = 0
+		end
+	end
+	return significance
 end
