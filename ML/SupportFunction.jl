@@ -167,8 +167,10 @@ function expandWithTransformations(X)
 	for i=1:xCols
 		insertArray = []
 		for j=1:xRows
-			if count(k->(k<=0), expandedX[j,i]) > 0
+			if count(k->(k<0), expandedX[j,i]) > 0
 				push!(insertArray, 0)
+			elseif count(k->(k==0), expandedX[j,i]) > 0
+				push!(insertArray, log(expandedX[j,i]+0.00001))
 			else
 				push!(insertArray, log(expandedX[j,i]))
 			end
@@ -233,4 +235,43 @@ function identifyParameters(betaSolution, colNames)
 		end
 		count += 1
 	end
+end
+
+"""
+Functions to make a split in data
+"""
+function createSampleX(x, inputRows)
+	inputX = copy(x)
+	outputX = inputX[inputRows,:]
+	return outputX
+end
+
+function createSampleY(y, inputRows)
+	inputY = copy(y)
+	outputY = inputY[inputRows,:]
+	return outputY
+end
+
+function selectSampleRows(rowsWanted, nRows)
+	rowsSelected = sample(1:nRows, rowsWanted, replace = false)
+	return rowsSelected
+end
+
+function selectSampleRowsWR(rowsWanted, nRows)
+	rowsSelected = rand(1:nRows, rowsWanted)
+	return rowsSelected
+end
+
+function splitDataIn2(data, rowsWanted, nRows)
+	rowsOne = selectSampleRows(rowsWanted, nRows)
+	rowsTwo = []
+	for i = 1:nRows
+		if !(i in rowsOne)
+			push!(rowsTwo, i)
+		end
+	end
+	dataSplitOne = data[rowsOne, :]
+	dataSplitTwo = data[rowsTwo, :]
+
+	return dataSplitOne, dataSplitTwo
 end
