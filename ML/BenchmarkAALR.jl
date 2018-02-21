@@ -15,18 +15,20 @@ println("Leeeeroooy Jenkins")
 
 #Skipper's path
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
-
-mainData = loadHousingData(path)
+mainData = loadConcrete(path)
+#mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
 
 mainDataArr = Array(mainData)
 halfRows = Int64(floor(size(mainDataArr)[1]/2))
 train, test = splitDataIn2(mainDataArr, halfRows, size(mainData)[1])
 
+colNames = names(mainData)
 trainingData = Array(train)
 testData = Array(test)
 nRows = size(trainingData)[1]
 nCols = size(trainingData)[2]
+
 
 #=
 mainData, testData = loadElevatorData(path)
@@ -90,6 +92,7 @@ XTest = testData[:,1:nCols-1]
 
 # TRANSFORMATIONS ###
 X = expandWithTransformations(X)
+
 XTest = expandWithTransformations(XTest)
 
 # Standardize
@@ -135,7 +138,6 @@ gamma = 10
 
 @variable(stage2Model, T) #First objective term
 @variable(stage2Model, G) #Second objective term
-
 
 #Define objective function (5a)
 @objective(stage2Model, Min, T+G)
@@ -192,7 +194,7 @@ println("Successfully added quadratic constraints")
 SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
 amountOfGammas = 5
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
-gammaArray = logspace(0, log10(SSTO/5000), amountOfGammas)
+gammaArray = log10.(logspace(0, log10.(SSTO), amountOfGammas))
 #Second objective term
 @constraint(stage2Model, 1*b .<= v)
 @constraint(stage2Model, -1*b .<= v)
@@ -212,28 +214,15 @@ for k=1:bCols
 		if k != j
 			if HC[k,j] >= rho
 				@constraint(stage2Model,z[k]+z[j] <= 1)
-
-				#=
-				#Check for errors in warmstart
-				if warmstartZ[j] + warmstartZ[k] > 1
-					println("Error with index $j and $k in constraingt 5f")
-				end
-				=#
 			end
 		end
 	end
 end
 
+
 #Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
 for j=1:(nCols-1)
 	@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
-
-	#=
-	#Check for errors in warmstart
-	if warmstartZ[j]+warmstartZ[j+(nCols-1)]+warmstartZ[j+2*(nCols-1)]+warmstartZ[j+3*(nCols-1)] > 1
-		println("Error with index $j in constraingt 5g")
-	end
-	=#
 end
 
 JuMP.build(stage2Model)
@@ -242,18 +231,18 @@ m2 = internalmodel(stage2Model)
 stage2Model = Model(solver = GurobiSolver(TimeLimit = 200))
 
 function changeBigM(model, newBigM)
-	startIndx = (nCols-1)*4
-	for i in 1:((nCols-1)*4)
+	startIndx = bCols
+	for i in 1:bCols
 		Gurobi.changecoeffs!(m2,[i],[startIndx+i],[-newBigM])
-		Gurobi.changecoeffs!(m2,[i+(nCols-1)*4],[startIndx+i],[-newBigM])
+		Gurobi.changecoeffs!(m2,[i+bCols],[startIndx+i],[-newBigM])
 		Gurobi.updatemodel!(m2)
 	end
 end
 
 function changeGamma(model, newGamma)
-	startRow  = (nCols-1)*4*4+1
-	startIndx = (nCols-1)*4*2
-	for i in 1:(nCols-1)*4
+	startRow  = bCols*4+1
+	startIndx = bCols*2
+	for i in 1:bCols
 		Gurobi.changecoeffs!(m2, [startRow], [startIndx+i], [newGamma])
 		Gurobi.updatemodel!(m2)
 	end
@@ -264,10 +253,11 @@ Gurobi.writeproblem(m2, "testproblem.lp")
 solArr = zeros(kmax*length(gammaArray),3)
 
 i=10
-for i in startIter:1:kmax
+for i in startIter:1:6
 	println("Calculating warmstart solution")
-	#Calculate warmstart
 
+	#=
+	#Calculate warmstart
 	warmStartError = 1e6
 	for j in 1:5
 		warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC, bSolved)
@@ -299,6 +289,7 @@ for i in startIter:1:kmax
 	startVar[bCols*3+2] = 10000
 
 	Gurobi.setwarmstart!(m2,startVar)
+	=#
 
 	#Set kMax rhs constraint
 	curLB = Gurobi.getconstrUB(m2) #Get current UBbounds
@@ -307,7 +298,7 @@ for i in startIter:1:kmax
 	Gurobi.updatemodel!(m2)
 
 	#Set new Big M
-	newBigM = tau*norm(warmStartBeta, Inf)
+	newBigM = 3#tau*norm(warmStartBeta, Inf)
 	changeBigM(m2,newBigM)
 
 	for j in 1:length(gammaArray)

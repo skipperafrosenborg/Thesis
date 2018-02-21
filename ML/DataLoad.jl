@@ -4,6 +4,12 @@ function loadHousingData(path)
     return mainData
 end
 
+function loadConcrete(path)
+    cd(path)
+    mainData = CSV.read("Concrete_Data.csv", delim = ',', nullable=false)
+    return mainData
+end
+
 function loadCPUData(path)
     cd(path)
     mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
