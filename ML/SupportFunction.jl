@@ -113,7 +113,7 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
 
-		println("Iteration $iter, error $curError")
+		#println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
 			println("Iteration $iter with error on $curError")
@@ -274,4 +274,40 @@ function splitDataIn2(data, rowsWanted, nRows)
 	dataSplitTwo = data[rowsTwo, :]
 
 	return dataSplitOne, dataSplitTwo
+end
+
+"""
+Type that allows us to track solution progress (time, nodes searched, objective and bestbound)
+"""
+type NodeData
+    time::Float64  # in seconds since the epoch
+    node::Int
+    obj::Float64
+    bestbound::Float64
+end
+
+"""
+Function that allows us to push information into the type NodeData
+"""
+function infocallback(cb)
+	node      = MathProgBase.cbgetexplorednodes(cb)
+	#println("INFO 1, nodes visited: ", node)
+	obj       = MathProgBase.cbgetobj(cb)
+	#println("INFO 2, objective is: ", obj)
+	bestbound = MathProgBase.cbgetbestbound(cb)
+	#println("INFO 3, best bound is: ", bestbound)
+	push!(bbdata, NodeData(time_ns(),node,obj,bestbound))
+end
+
+"""
+Function that converts a NodeData type into a csv file in the working directory
+"""
+function printSolutionToCSV(stringName, bbdata)
+	open(stringName,"w") do fp
+		println(fp, "time,node,obj,bestbound")
+		for bb in bbdata
+			println(fp, round(bb.time,4), ",", round(bb.node,2), ",",
+						round(bb.obj,2), ",", round(bb.bestbound,2))
+		end
+	end
 end
