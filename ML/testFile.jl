@@ -1,49 +1,70 @@
 using JuMP
 using Gurobi
-##### Simple LP
-# Example taken directly from https://jump.readthedocs.org/en/latest/quickstart.html
+
+const GUR = Gurobi
 
 println("***** Problem 1 *****")
 m = Model(solver = GurobiSolver())
 @variable(m, 0 <= x <= 2 )
 @variable(m, 0 <= y <= 30 )
+@variable(m, 0 <= z <= 30 )
 
 @objective(m, Max, 5x + 3*y )
-@constraint(m, 1x + 5y <= 3.0 )
+@constraint(m,kMaxConstr, 1x + 5y <= 3.0*z )
+@constraint(m,kMaxConstr, 4x + 3y <= 1.0*z )
+JuMP.setRHS(kMaxConstr, 5)
+@constraint(m,kMaxConstr, 4x^2 + 3y <= 1.0*z )
 
 print(m)
 
-status = solve(m)
+JuMP.build(m)
 
-println("Objective value: ", getobjectivevalue(m))
-println("x = ", getvalue(x))
-println("y = ", getvalue(y))
+m2 = internalmodel(m)
 
-##### Another simple LP with logical conditions in constraint definition
-# Example from https://groups.google.com/forum/#!topic/julia-opt/pMHz-9YHN2o
-# Note: This example only works with Julia-v0.4 and later
+println(m2)
 
-println(" ")
-println("***** Problem 2 *****")
+Gurobi.setquadobj!(m2,[1.0],[1.0],[0.0])
+Gurobi.updatemodel!(m2)
+Gurobi.getobj(m2)
 
-m = Model()
 
-I = 1:5
 
-@variable(m, 0 <= x[I] <= 10)
-@variable(m, 0 <= y[I] <= 10)
+GUR.optimize!(m2)
 
-# This constraint is only considered when i + j are less than or equal to 3
-# Note: Only supported by Julia-v0.4 and later
-@constraint(m, constr[i=I,j=I; i+j <= 3], x[i] - y[j] == 1)
+#GUR.changecoeffs!(m2,[1,2],[1,2],[100,240])
 
-@objective(m, Min, sum{x[i] + y[i], i=I})
+GUR.updatemodel!(m2)
 
-print(m)
+print(GUR.getconstrmatrix(m2))
 
-status = solve(m)
+println(GUR.getconstrUB(m2))
 
-println(" ")
-println("Objective value: ", getobjectivevalue(m))
-println("x = ", getvalue(x))
-println("y = ", getvalue(y))
+GUR.getq(m2)
+
+GUR.optimize!(m2)
+
+function getq(model::Model)
+    nz = get_intattr(model, "NumQNZs")
+    rowidx = Array{Cint}(nz)
+    colidx = Array{Cint}(nz)
+    val = Array{Float64}(nz)
+    nzout = Array{Cint}(1)
+
+    ret = Gurobi.@grb_ccall(getq, Cint, (
+        Ptr{Void},  # model
+        Ptr{Cint},  # numqnzP
+        Ptr{Cint},  # qrow
+        Ptr{Cint},  # qcol
+        Ptr{Float64}# qval
+        ),
+        model,nzout,rowidx,colidx,val)
+
+    if ret != 0
+        throw(GurobiError(model.env, ret))
+    end
+
+    return rowidx, colidx, val
+end
+
+println(Gurobi.getq(m2.inner))
+Gurobi.writeproblem(m2, "testproblem.lp")

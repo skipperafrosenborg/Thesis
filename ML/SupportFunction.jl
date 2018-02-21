@@ -19,14 +19,11 @@ end
 Function an array with the kMax largest absolute values
 and all other values shrunk to 0
 """
-#NEED TO IMPLEMENT THAT QUADRATIC, LOG AND SQRT CAN'T BE SELECTED
 function shrinkValuesH(betaVector, kMax, HCArray)
 	#Make aboslute copy of betaVector
 	absCopy = copy(abs.(betaVector))
 	#Create zeroVector
 	zeroVector = zeros(betaVector)
-
-    #If any found, set value to 0 and continue
 
 	for i in 1:kMax
 		#Find index of maximum value in absolute vector
@@ -80,7 +77,7 @@ end
 Vanilla gradient decent which only keeps the kMax biggest values. All other
 values are shrunk to 0.
 """
-function gradDecent(X, y, L, epsilon, kMax, HC)
+function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
     HCArray = Matrix(0,2)
     rho = 0.8
     for k=1:size(X)[2]
@@ -93,7 +90,11 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
     	end
     end
 
-    betaVector = shrinkValuesH(rand(size(X)[2]),kmax, HCArray)
+	if countnz(bSolved) < 1
+		bSolved = rand(size(X)[2])
+	end
+
+    betaVector = shrinkValuesH(bSolved,kmax, HCArray)
 
 	#Initialise parameters
 	iter = 0
@@ -104,13 +105,15 @@ function gradDecent(X, y, L, epsilon, kMax, HC)
 		oldBetaVector = copy(betaVector)
 
 		#Calculate delta(g(beta))
-		gradBeta = -X'*(y-X*betaVector)
+		gradBeta = X'*(y-X*betaVector)
 
 		#Shrink smalles values
-		betaVector = copy(shrinkValuesH(betaVector-1/L*gradBeta, kMax, HCArray))
+		betaVector = copy(shrinkValuesH(betaVector+1/L*gradBeta, kMax, HCArray))
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
+
+		#println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
 			println("Iteration $iter with error on $curError")
@@ -164,8 +167,10 @@ function expandWithTransformations(X)
 	for i=1:xCols
 		insertArray = []
 		for j=1:xRows
-			if count(k->(k<=0), expandedX[j,i]) > 0
+			if count(k->(k<0), expandedX[j,i]) > 0
 				push!(insertArray, 0)
+			elseif count(k->(k==0), expandedX[j,i]) > 0
+				push!(insertArray, log(expandedX[j,i]+0.00001))
 			else
 				push!(insertArray, log(expandedX[j,i]))
 			end
@@ -189,4 +194,203 @@ function expandWithTransformations(X)
 	#Ensure we return a Float64 array
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
+end
+
+"""
+Function to identify which parameters have been selected (transformed or not)
+"""
+function identifyParameters(betaSolution, colNames)
+	originalColumns = Int64(length(betaSolution)/4)
+	# test original parameters
+	count = 1
+	for i=1:originalColumns
+		if !isequal(betaSolution[i],0)
+			println("Parameter '", colNames[count],"' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+
+	# test for squared
+	count = 1
+	for i=(originalColumns+1):(2*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter '", colNames[count],"^2' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+
+	# test for natural log
+	count = 1
+	for i=(originalColumns*2+1):(3*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter 'ln(", colNames[count],")' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+	# test for sqrt
+	count = 1
+	for i=(originalColumns*3+1):(4*originalColumns)
+		if !isequal(betaSolution[i],0)
+			println("Parameter 'sqrt(", colNames[count],")' has been selected with value ", round(betaSolution[i],3))
+		end
+		count += 1
+	end
+end
+
+"""
+Functions to make a split in data
+"""
+function createSampleX(x, inputRows)
+	inputX = copy(x)
+	outputX = inputX[inputRows,:]
+	return outputX
+end
+
+function createSampleY(y, inputRows)
+	inputY = copy(y)
+	outputY = inputY[inputRows,:]
+	return outputY
+end
+
+function selectSampleRows(rowsWanted, nRows)
+	rowsSelected = sample(1:nRows, rowsWanted, replace = false)
+	return rowsSelected
+end
+
+function selectSampleRowsWR(rowsWanted, nRows)
+	rowsSelected = rand(1:nRows, rowsWanted)
+	return rowsSelected
+end
+
+function splitDataIn2(data, rowsWanted, nRows)
+	rowsOne = selectSampleRows(rowsWanted, nRows)
+	rowsTwo = []
+	for i = 1:nRows
+		if !(i in rowsOne)
+			push!(rowsTwo, i)
+		end
+	end
+	dataSplitOne = data[rowsOne, :]
+	dataSplitTwo = data[rowsTwo, :]
+
+	return dataSplitOne, dataSplitTwo
+end
+
+"""
+Type that allows us to track solution progress (time, nodes searched, objective and bestbound)
+"""
+type NodeData
+    time::Float64  # in seconds since the epoch
+    node::Int
+    obj::Float64
+    bestbound::Float64
+end
+
+"""
+Function that allows us to push information into the type NodeData
+"""
+function infocallback(cb)
+	node      = MathProgBase.cbgetexplorednodes(cb)
+	#println("INFO 1, nodes visited: ", node)
+	obj       = MathProgBase.cbgetobj(cb)
+	#println("INFO 2, objective is: ", obj)
+	bestbound = MathProgBase.cbgetbestbound(cb)
+	#println("INFO 3, best bound is: ", bestbound)
+	push!(bbdata, NodeData(time_ns(),node,obj,bestbound))
+end
+
+"""
+Function that converts a NodeData type into a csv file in the working directory
+"""
+function printSolutionToCSV(stringName, bbdata)
+	open(stringName,"w") do fp
+		println(fp, "time,node,obj,bestbound")
+		for bb in bbdata
+			println(fp, round(bb.time,4), ",", round(bb.node,2), ",",
+						round(bb.obj,2), ",", round(bb.bestbound,2))
+		end
+	end
+end
+
+"""
+Generating samplesize amount of beta-values for a beta distribution
+"""
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma)
+	for i=1:sampleSize
+		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
+		sampleX = createSampleX(standX, sampleRows)
+		sampleY = createSampleY(standY, sampleRows)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma)
+		println("Sample $i/$sampleSize is done")
+	end
+end
+
+function solveForBeta(X, Y, k, gamma)
+	stage2Model = buildStage2(X, Y, k)
+
+	#Set kMax rhs constraint
+	curLB = Gurobi.getconstrUB(stage2Model) #Get current UBbounds
+	curLB[bCols*4+2] = k #Change upperbound in current bound vector
+	Gurobi.setconstrUB!(stage2Model, curLB) #Push bound vector to model
+	Gurobi.updatemodel!(stage2Model)
+
+	#Set new Big M
+	newBigM = 3#tau*norm(warmStartBeta, Inf)
+	changeBigM(stage2Model,newBigM)
+
+	changeGamma(stage2Model, gamma)
+
+	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
+	#Solve Stage 2 model
+	status = Gurobi.optimize!(stage2Model)
+	println("Objective value: ", Gurobi.getobjval(stage2Model))
+
+	sol = Gurobi.getsolution(stage2Model)
+	#Get solution and calculate R^2
+	bSolved = sol[1:bCols]
+	return bSolved
+end
+
+"""
+Creates a confidence interval based on confidence interval level and nBoot
+bootstrapped samples from the created beta distribution
+"""
+function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
+	bSample = convert(Array{Float64}, sampleInput)
+	bCols = size(bSample)[2]
+	confIntArray = Matrix(2, bCols)
+	for i=1:bCols
+		bs = bootstrap(bSample[:,i], mean, BasicSampling(nBoot))
+		cil = confLevel
+		CiEst = ci(bs, BasicConfInt(cil))
+		confIntArray[1,i] = CiEst[1][2] #lower
+		confIntArray[2,i] = CiEst[1][3]
+	end
+	return confIntArray
+end
+"""
+Based on the confidence intervals created, significance of found parameters can
+be tested with this function
+"""
+function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResult)
+	bCols = size(bResult)[1]
+	significance = zeros(bCols)
+	for i=1:bCols
+		if bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[1,i] > 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray99[1,i] && bResult[i] <=confIntArray99[2,i] && confIntArray99[2,i] < 0
+			significance[i] = 0.99
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[1,i] > 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray95[1,i] && bResult[i] <=confIntArray95[2,i] && confIntArray95[2,i] < 0
+			significance[i] = 0.95
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[1,i] > 0
+			significance[i] = 0.90
+		elseif bResult[i] >= confIntArray90[1,i] && bResult[i] <=confIntArray90[2,i] && confIntArray90[2,i] < 0
+			significance[i] = 0.90
+		else
+			significance[i] = 0
+		end
+	end
+	return significance
 end
