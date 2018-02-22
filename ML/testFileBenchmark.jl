@@ -342,7 +342,6 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 	bCols = size(X)[2]
 	nRows = size(X)[1]
 	cuts = Matrix(0, bCols+1)
-	bZeros = zeros(bCols)
 	rowsPerSample = nRows #All of rows in training data to generate beta estimates, but selected with replacement
 	totalSamples = 25 #25 different times we will get a beta estimate
 	nBoot = 1000
@@ -350,6 +349,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 		xColumns = []
 		bSample = Matrix(totalSamples, bCols)
 		if i == 1
+			bZeros = zeros(bCols)
 			for j = 1:bCols
 				if !isequal(bestBeta1[j],0)
 					push!(xColumns, j)
@@ -366,31 +366,36 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 			end
 
 			# test significance
+			bZeros = zeros(bCols)
 			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
 
 			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta1)
-			significanceResult = significanceResult[xColumns]
+			significanceResultNONSI = [] # = significanceResult[xColumns]
 			subsetSize = size(xColumns)[1]
-			for s=1:subsetSize
-				if significanceResult[s] > 0
-					println("Parameter $s is significant with ", significanceResult[s])
-				else
-					println("Parameter $s is NOT significant")
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
 				end
 			end
 
 
-			if count(k->(k==0), significanceResult) > 0
-				bZeros[xColumns] = 1
-				subsetSize = size(xColumns)[1]
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
 				newCut = [bZeros' subsetSize]
 				cuts = [cuts; newCut]
 				println("A cut based on parameters being non-significant in Beta$i has been created")
 			end
 		elseif i == 2
+			bZeros = zeros(bCols)
 			for j = 1:bCols
 				if !isequal(bestBeta1[j],0)
 					push!(xColumns, j)
@@ -408,30 +413,37 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 
 			# test significance
+			bZeros = zeros(bCols)
 			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
 
-			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta1)
-			significanceResult = significanceResult[xColumns]
+			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta2)
+			significanceResultNONSI = [] # = significanceResult[xColumns]
 			subsetSize = size(xColumns)[1]
-			for s=1:subsetSize
-				if significanceResult[s] > 0
-					println("Parameter $s is significant with ", significanceResult[s])
-				else
-					println("Parameter $s is NOT significant")
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
 				end
 			end
-			if count(k->(k==0), significanceResult) > 0
-				bZeros[xColumns] = 1
-				subsetSize = size(xColumns)[1]
+
+
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
 				newCut = [bZeros' subsetSize]
 				cuts = [cuts; newCut]
 				println("A cut based on parameters being non-significant in Beta$i has been created")
 			end
 
 		else
+			bZeros = zeros(bCols)
 			for j = 1:bCols
 				if !isequal(bestBeta3[j],0)
 					push!(xColumns, j)
@@ -449,25 +461,30 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 
 			# test significance
+			bZeros = zeros(bCols)
 			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
 
-			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta1)
-			significanceResult = significanceResult[xColumns]
+			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta3)
+			significanceResultNONSI = [] # = significanceResult[xColumns]
 			subsetSize = size(xColumns)[1]
-			for s=1:subsetSize
-				if significanceResult[s] > 0
-					println("Parameter $s is significant with ", significanceResult[s])
-				else
-					println("Parameter $s is NOT significant")
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
 				end
 			end
 
-			if count(k->(k==0), significanceResult) > 0
-				bZeros[xColumns] = 1
-				subsetSize = size(xColumns)[1]
+
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
 				newCut = [bZeros' subsetSize]
 				cuts = [cuts; newCut]
 				println("A cut based on parameters being non-significant in Beta$i has been created")
@@ -616,4 +633,4 @@ function solveForBeta(X, Y, K)
 	return bSolved
 end
 
-stageThree(bestBeta, 14, bestBeta, 14, bestBeta, 14, standX, standY)
+cutsGenerated = stageThree(bestBeta, 14, bestBeta, 14, bestBeta, 14, standX, standY)
