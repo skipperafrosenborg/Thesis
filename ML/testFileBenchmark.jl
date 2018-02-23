@@ -333,7 +333,7 @@ than the other. All it means is that variables are more correlated or less.
 Whether it's good or not depends on the application.
 """
 using Bootstrap
-function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, Y)
+function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2, bestBeta3, bestK3, bestGamma3, X, Y)
 	#Condition Number
 	#A high condition number indicates a multicollinearity problem. A condition
 	# number greater than 15 is usually taken as evidence of
@@ -367,7 +367,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample,  bestGamma1) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -414,7 +414,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample,  bestGamma2) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -462,7 +462,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample,  bestGamma3) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -495,7 +495,7 @@ function stageThree(bestBeta1, bestK1, bestBeta2, bestK2, bestBeta3, bestK3, X, 
 	return cuts
 end
 
-function solveForBeta(X, Y, K)
+function solveForBeta(X, Y, K, cutMatrix)
 	#Initialise values for check later
 	bCols = size(X)[2]
 	standX = copy(X)
@@ -614,6 +614,8 @@ function solveForBeta(X, Y, K)
 	for j=1:(nCols-1)
 		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1)
 	end
+
+	
 
 
 	JuMP.build(stage2Model)

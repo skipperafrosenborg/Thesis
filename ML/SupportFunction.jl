@@ -116,7 +116,7 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
 		#println("Iteration $iter, error $curError")
 
 		if iter%1000 == 0
-			#println("Iteration $iter with error on $curError")
+			println("Iteration $iter with error on $curError")
 		end
 	end
 	#println("End error: $curError")
@@ -312,19 +312,79 @@ function printSolutionToCSV(stringName, bbdata)
 	end
 end
 
-
 """
 Generating samplesize amount of beta-values for a beta distribution
 """
-function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample)
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma)
 	for i=1:sampleSize
 		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
-		bSample[i,:] = solveForBeta(sampleX, sampleY, k)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma)
 		println("Sample $i/$sampleSize is done")
 	end
 end
+
+function solveForBeta(X, Y, k, gamma)
+	stage2Model, HCPairCounter = buildStage2(X, Y, k)
+
+	#Set kMax rhs constraint
+	curUB = Gurobi.getconstrUB(stage2Model) #Get current UBbounds
+	curUB[bCols*4+2] = k #Change upperbound in current bound vector
+	Gurobi.setconstrUB!(stage2Model, curUB) #Push bound vector to model
+	Gurobi.updatemodel!(stage2Model)
+
+	#Set new Big M
+	newBigM = 3#tau*norm(warmStartBeta, Inf)
+	changeBigM(stage2Model,newBigM)
+
+	changeGamma(stage2Model, gamma)
+
+	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
+	#Solve Stage 2 model
+	status = Gurobi.optimize!(stage2Model)
+	println("Objective value: ", Gurobi.getobjval(stage2Model))
+
+	sol = Gurobi.getsolution(stage2Model)
+	#Get solution and calculate R^2
+	bSolved = sol[1:bCols]
+	return bSolved
+end
+
+function changeBigM(model, newBigM)
+	startIndx = bCols
+	for i in 1:bCols
+		Gurobi.changecoeffs!(model,[i],[startIndx+i],[-newBigM])
+		Gurobi.changecoeffs!(model,[i+bCols],[startIndx+i],[-newBigM])
+		Gurobi.updatemodel!(model)
+	end
+end
+
+function changeGamma(model, newGamma)
+	startRow  = bCols*4+1
+	startIndx = bCols*2
+	for i in 1:bCols
+		Gurobi.changecoeffs!(model, [startRow], [startIndx+i], [newGamma])
+		Gurobi.updatemodel!(model)
+	end
+end
+
+
+function addCuts(model, cutMatrix, preCutCounter)
+	if !isempty(cutMatrix)
+		curUB = Gurobi.getconstrUB(model)
+		cutRows = size(cutMatrix)[1]
+		cutCols = size(cutMatrix)[2]
+		for r = 1:cutRows
+			curUB[4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter] = cutMatrix[r, cutCols]-1
+			Gurobi.setconstrUB!(model, curUB)
+			for c = 1:(cutCols-1)
+				Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter], [bCols+c], [cutMatrix[r,c]])
+			end
+		end
+	end
+end
+
 
 """
 Creates a confidence interval based on confidence interval level and nBoot
