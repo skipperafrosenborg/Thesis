@@ -10,11 +10,11 @@ include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
 #Esben's path
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
-path = "$(homedir())/Documents/GitHub/Thesis/Data"
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 mainData = loadConcrete(path)
 #mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
@@ -109,14 +109,13 @@ standXVali = zScoreByColumn(XVali)
 standYVali = zscore(yVali)
 
 # Output for Lasso regression in R
-#=
-writedlm("Elevators/elevatorXTrain.CSV",standX,",")
-writedlm("Elevators/elevatorYTrain.CSV",standY,",")
-writedlm("Elevators/elevatorXTest.CSV",standXTest,",")
-writedlm("Elevators/elevatorYTest.CSV",standYTest,",")
-writedlm("Elevators/elevatorXVali.CSV",standXVali,",")
-writedlm("Elevators/elevatorYVali.CSV",standYVali,",")
-=#
+writedlm("concreteXTrain.CSV",standX,",")
+writedlm("concreteYTrain.CSV",standY,",")
+writedlm("concreteXTest.CSV",standXTest,",")
+writedlm("concreteYTest.CSV",standYTest,",")
+writedlm("concreteXVali.CSV",standXVali,",")
+writedlm("concreteYVali.CSV",standYVali,",")
+
 
 #Initialise values for check later
 bCols = size(X)[2]
@@ -143,7 +142,7 @@ function buildStage2(standX, standY, kmax)
 	HCPairCounter = 0
 	#println("Building model")
 	#Define parameters and model
-	stage2Model = Model(solver = GurobiSolver(TimeLimit = 200))
+	stage2Model = Model(solver = GurobiSolver(TimeLimit = 200, OutputFlag = 0))
 	gamma = 10
 
 	#Define variables
@@ -372,16 +371,15 @@ end
 
 
 
-
-"""
+#="""
 For each of the three beta sets produced, we will test for significance
 and condition number of model to see if cuts are necessary
 High or low condition number doesn't mean that one correlation matrix is "better"
 than the other. All it means is that variables are more correlated or less.
 Whether it's good or not depends on the application.
-"""
+"""=#
 using Bootstrap #External packages, must be added
-function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2, bestBeta3, bestK3, bestGamma3, X, Y)
+function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2, bestBeta3, bestK3, bestGamma3, X, Y, allCuts)
 	#Condition Number
 	#A high condition number indicates a multicollinearity problem. A condition
 	# number greater than 15 is usually taken as evidence of
@@ -415,7 +413,7 @@ function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample,  bestGamma1) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample,  bestGamma1, allCuts) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -478,7 +476,7 @@ function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample,  bestGamma2) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample,  bestGamma2, allCuts) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -526,7 +524,7 @@ function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2
 
 			# test significance
 			bZeros = zeros(bCols)
-			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample,  bestGamma3) #standX, standY, k, sampleSize, rowsPerSample
+			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample,  bestGamma3, allCuts) #standX, standY, k, sampleSize, rowsPerSample
 			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
@@ -565,6 +563,7 @@ end
 #kBestSol = kValue[indmax(RsquaredValue)]
 #println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
 
+allCuts = []
 stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
 
 Gurobi.writeproblem(stage2Model, "testproblem1.lp")
@@ -572,13 +571,16 @@ best3Beta, solArr, stage2Model = solveForAllK(stage2Model, kmax)
 
 cuts = stageThree(best3Beta[3,4:bCols+3], best3Beta[3,2], best3Beta[3,3],
  				  best3Beta[2,4:bCols+3], best3Beta[2,2], best3Beta[2,3],
-				  best3Beta[1,4:bCols+3], best3Beta[1,2], best3Beta[1,3], standX, standY)
+				  best3Beta[1,4:bCols+3], best3Beta[1,2], best3Beta[1,3], standX, standY, allCuts)
 cutCounter = 0
 count = 1
+cutMatrix = []
+
 while !isempty(cuts)
 	#Function to add cuts to problem
 	#addCuts(stage2Model, cuts)
 	preCutCounter = copy(cutCounter)
+	allCuts = vcat(allCuts,cuts)
 	cutMatrix = cuts
 	cutRows = size(cutMatrix)[1]
 	cutCols = size(cutMatrix)[2]
@@ -590,14 +592,14 @@ while !isempty(cuts)
 	#Resolve problem
 	Gurobi.updatemodel!(stage2Model)
 	Gurobi.writeproblem(stage2Model, "testproblem2.lp")
-	println(stage2Model)
+	#println(stage2Model)
 	best3Beta, solArr = solveForAllK(stage2Model, kmax)
 
 	#Stage 3
 	cuts = stageThree(best3Beta[3,4:bCols+3], best3Beta[3,2], best3Beta[3,3],
 	 				  best3Beta[2,4:bCols+3], best3Beta[2,2], best3Beta[2,3],
 					  best3Beta[1,4:bCols+3], best3Beta[1,2], best3Beta[1,3],
-					  standX, standY)
+					  standX, standY, allCuts)
 	println("Count is $count")
 	count += 1
 	if count == 4
@@ -608,7 +610,7 @@ while !isempty(cuts)
 end
 
 best3Beta
-
+Gurobi.writeproblem(stage2Model, "testproblem3.lp")
 #=
 cutMatrix = Matrix(0,bCols+1)
 newCut = zeros(bCols+1)
@@ -624,7 +626,7 @@ cutMatrix = [cutMatrix; newCut2']
 
 
 
-
+#=
 addCuts(stage2Model, cutMatrix)
 Gurobi.updatemodel!(stage2Model)
-Gurobi.writeproblem(stage2Model, "testproblem3.lp")
+=#

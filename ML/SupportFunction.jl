@@ -315,37 +315,43 @@ end
 """
 Generating samplesize amount of beta-values for a beta distribution
 """
-function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma)
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma, allCuts)
+	#Gurobi.set_int_param!(stage2Model.inner, "OutputFlag", 0)
 	for i=1:sampleSize
 		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
-		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma)
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts)
 		println("Sample $i/$sampleSize is done")
 	end
+	#Gurobi.set_int_param!(stage2Model.inner, "OutputFlag", 1)
 end
 
-function solveForBeta(X, Y, k, gamma)
-	stage2Model, HCPairCounter = buildStage2(X, Y, k)
+function solveForBeta(X, Y, k, gamma, allCuts)
+	TempStage2Model, HCPairCounter = buildStage2(X, Y, k)
 
 	#Set kMax rhs constraint
-	curUB = Gurobi.getconstrUB(stage2Model) #Get current UBbounds
+	curUB = Gurobi.getconstrUB(TempStage2Model) #Get current UBbounds
 	curUB[bCols*4+2] = k #Change upperbound in current bound vector
-	Gurobi.setconstrUB!(stage2Model, curUB) #Push bound vector to model
-	Gurobi.updatemodel!(stage2Model)
+	Gurobi.setconstrUB!(TempStage2Model, curUB) #Push bound vector to model
+	Gurobi.updatemodel!(TempStage2Model)
 
 	#Set new Big M
 	newBigM = 3#tau*norm(warmStartBeta, Inf)
-	changeBigM(stage2Model,newBigM)
+	changeBigM(TempStage2Model,newBigM)
 
-	changeGamma(stage2Model, gamma)
+	changeGamma(TempStage2Model, gamma)
+
+	if !isempty(allCuts)
+		addCuts(TempStage2Model, allCuts, 0)
+	end
 
 	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
 	#Solve Stage 2 model
-	status = Gurobi.optimize!(stage2Model)
-	println("Objective value: ", Gurobi.getobjval(stage2Model))
+	status = Gurobi.optimize!(TempStage2Model)
+	#println("Objective value: ", Gurobi.getobjval(TempStage2Model))
 
-	sol = Gurobi.getsolution(stage2Model)
+	sol = Gurobi.getsolution(TempStage2Model)
 	#Get solution and calculate R^2
 	bSolved = sol[1:bCols]
 	return bSolved
