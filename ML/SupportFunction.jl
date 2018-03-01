@@ -315,21 +315,47 @@ end
 """
 Generating samplesize amount of beta-values for a beta distribution
 """
-function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma, allCuts)
-	#Gurobi.set_int_param!(stage2Model.inner, "OutputFlag", 0)
+function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma, allCuts, bestZ)
+	println("0% through samples")
 	for i=1:sampleSize
 		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
-		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts)
-		println("Sample $i/$sampleSize is done")
+		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts, bestZ);
+		#bSample[i,:] = solveForBetaClosedForm(sampleX, sampleY, k, bestZ)
+		if i == floor(sampleSize/2)
+			println("50% through samples, $i missing")
+		end
 	end
-	#Gurobi.set_int_param!(stage2Model.inner, "OutputFlag", 1)
+	println("100% through samples")
 end
 
-function solveForBeta(X, Y, k, gamma, allCuts)
-	TempStage2Model, HCPairCounter = buildStage2(X, Y, k)
+function solveForBetaClosedForm(X, Y, k, bestZ)
+	tempX = zeros(size(X)[1],k)
+	j=0
+	for i in 1:length(bestZ)
+		if bestZ[i] != 0
+			j += 1
+			tempX[:,j] = X[:,i]
+		end
+		if j == k break end
+	end
 
+	nonZeroBeta = inv(tempX'*tempX)*tempX'*Y
+	bSolved=zeros(bCols)
+	j=0
+	for i in 1:length(bestZ)
+		if bestZ[i] != 0
+			j += 1
+			bSolved[i] = nonZeroBeta[j]
+		end
+		if j == k break end
+	end
+	return bSolved
+end
+
+function solveForBeta(X, Y, k, gamma, allCuts, bestZ)
+	TempStage2Model, HCPairCounter = buildStage2(X, Y, k);
 	#Set kMax rhs constraint
 	curUB = Gurobi.getconstrUB(TempStage2Model) #Get current UBbounds
 	curUB[bCols*4+2] = k #Change upperbound in current bound vector
@@ -342,16 +368,20 @@ function solveForBeta(X, Y, k, gamma, allCuts)
 
 	changeGamma(TempStage2Model, gamma)
 
+	#fixSolution TO BE IMPLEMENTED
+	fixSolution(TempStage2Model, bestZ)
+
 	if !isempty(allCuts)
 		addCuts(TempStage2Model, allCuts, 0)
 	end
+	#println(Gurobi.getconstrLB(TempStage2Model));
+	#println(Gurobi.getconstrUB(TempStage2Model));
 
-	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
 	#Solve Stage 2 model
-	status = Gurobi.optimize!(TempStage2Model)
+	status = Gurobi.optimize!(TempStage2Model);
 	#println("Objective value: ", Gurobi.getobjval(TempStage2Model))
 
-	sol = Gurobi.getsolution(TempStage2Model)
+	sol = Gurobi.getsolution(TempStage2Model);
 	#Get solution and calculate R^2
 	bSolved = sol[1:bCols]
 	return bSolved
@@ -375,6 +405,21 @@ function changeGamma(model, newGamma)
 	end
 end
 
+function fixSolution(model, bestZ)
+	if !isempty(bestZ)
+		curUB = Gurobi.getconstrUB(model)
+		curLB = Gurobi.getconstrLB(model)
+		cutCols = size(bestZ)[1]
+		curUB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
+		curLB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
+		Gurobi.setconstrUB!(model, curUB)
+		Gurobi.setconstrLB!(model, curLB)
+		for c = 1:(cutCols)
+			Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+1], [bCols+c], [bestZ[c]])
+		end
+	end
+	Gurobi.updatemodel!(model)
+end
 
 function addCuts(model, cutMatrix, preCutCounter)
 	if !isempty(cutMatrix)
@@ -382,13 +427,14 @@ function addCuts(model, cutMatrix, preCutCounter)
 		cutRows = size(cutMatrix)[1]
 		cutCols = size(cutMatrix)[2]
 		for r = 1:cutRows
-			curUB[4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter] = cutMatrix[r, cutCols]-1
+			curUB[4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter+1] = cutMatrix[r, cutCols]-1
 			Gurobi.setconstrUB!(model, curUB)
 			for c = 1:(cutCols-1)
-				Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter], [bCols+c], [cutMatrix[r,c]])
+				Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+r+preCutCounter+1], [bCols+c], [cutMatrix[r,c]])
 			end
 		end
 	end
+	Gurobi.updatemodel!(model)
 end
 
 
