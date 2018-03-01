@@ -429,3 +429,56 @@ function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResul
 	end
 	return significance
 end
+
+#using StatPlots
+#using Distributions
+using HypothesisTests
+function residualTesting(best3Beta, standX, standY)
+    nModels = size(best3Beta)[1]
+    bCols = size(standX)[2]
+    nRows = size(standX)[1]
+    residuals = Matrix(nRows, nModels)
+
+    for i = 1:nModels
+        residuals[:,i] = standY - standX*best3Beta[i, 4:bCols+3]
+        res = convert(Array{Float64,1}, residuals[:,i])
+        #plot(
+        #    qqnorm(res, qqline = :R)
+        #)
+        BinomTest(res)
+        JBTest(res)
+    end
+    writedlm("residuals.CSV", residuals,",")
+end
+
+
+function BinomTest(residuals)
+	boo = false
+	posCount=0
+	for i=1:length(residuals)
+		if residuals[i] > 0
+			posCount+=1
+		end
+	end
+
+	binomTest = BinomialTest(posCount, length(residuals), 0.5)
+	if pvalue(binomTest) <= 0.05
+		println("Binomial test (equal probability of + and -) failed, p=",pvalue(binomTest))
+	else
+		println("Binomial test is passed")
+		boo = true
+	end
+	return boo
+end
+
+function JBTest(residuals)
+    boo = false
+    JBObject = JarqueBeraTest(residuals)
+    if pvalue(JBObject) <= 0.05
+		println("JarqueBera test (residual dist. similar to normal) failed, p=",pvalue(JBObject))
+	else
+		println("JarqueBera test is passed")
+		boo = true
+	end
+    return boo
+end
