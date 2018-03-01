@@ -5,6 +5,7 @@ using Gurobi
 using StatsBase
 using DataFrames
 using CSV
+using Bootstrap #External packages, must be added
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
@@ -389,7 +390,6 @@ High or low condition number doesn't mean that one correlation matrix is "better
 than the other. All it means is that variables are more correlated or less.
 Whether it's good or not depends on the application.
 """=#
-using Bootstrap #External packages, must be added
 
 function stageThree(best3Beta, X, Y, allCuts)
 	#=Condition Number
@@ -525,13 +525,11 @@ while !isempty(cuts)
 
 	#Stage 3
 	cuts = stageThree(best3Beta, standX, standY, allCuts)
-	println("Count is $runCount")
+	println("Finished iteration $runCount")
 	runCount += 1
 	if runCount == 4
 		break
 	end
-
-	println("Count is $runCount")
 end
 
 best3Beta

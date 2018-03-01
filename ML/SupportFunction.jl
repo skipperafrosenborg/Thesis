@@ -449,7 +449,7 @@ function createConfidenceIntervalArray(sampleInput, nBoot, confLevel)
 	for i=1:bCols
 		bs = bootstrap(bSample[:,i], mean, BasicSampling(nBoot))
 		cil = confLevel
-		CiEst = ci(bs, BasicConfInt(cil))
+		CiEst = Bootstrap.ci(bs, BasicConfInt(cil))
 		confIntArray[1,i] = CiEst[1][2] #lower
 		confIntArray[2,i] = CiEst[1][3]
 	end
