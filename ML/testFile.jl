@@ -144,6 +144,8 @@ amountOfGammas = 5
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
 gammaArray = log10.(logspace(0, log10.(SSTO), amountOfGammas))
 
+bbdata = NodeData[]
+
 function buildStage2(standX, standY, kmax)
 	HC = cor(X)
 	HCPairCounter = 0
@@ -254,6 +256,7 @@ function buildStage2(standX, standY, kmax)
 		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
 	end
 
+	#addinfocallback(stage2Model, infocallback, when = :Intermediate)
 
 	JuMP.build(stage2Model)
 
@@ -331,6 +334,7 @@ function solveForAllK(model, kmax)
 
 			sol = Gurobi.getsolution(model)
 
+			#printSolutionToCSV("lars.csv", bbdata)
 			#Get solution and calculate R^2
 			bSolved = sol[1:bCols]
 			zSolved = sol[1+bCols:2*bCols]
@@ -478,12 +482,11 @@ end
 #bestRsquared = maximum(RsquaredValue)
 #kBestSol = kValue[indmax(RsquaredValue)]
 #println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
-@profile solveForAllK(stage2Model, kmax)
-Profile.clear()
-Profile.print()
+
 bSample = []
 allCuts = []
 signifBoolean = zeros(3)
+
 stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
 
 Gurobi.writeproblem(stage2Model, "testproblem1.lp")
@@ -533,25 +536,3 @@ end
 
 best3Beta
 Gurobi.writeproblem(stage2Model, "testproblem3.lp")
-
-
-
-#=
-cutMatrix = Matrix(0,bCols+1)
-newCut = zeros(bCols+1)
-newCut[[1 2 3 4 5]] = 1
-newCut
-newCut[bCols+1] = 5
-cutMatrix = [cutMatrix; newCut']
-newCut2 = zeros(bCols+1)
-newCut2[[7 8 10 11]] = 1
-newCut2[bCols+1] = 4
-cutMatrix = [cutMatrix; newCut2']
-=#
-
-
-
-#=
-addCuts(stage2Model, cutMatrix)
-Gurobi.updatemodel!(stage2Model)
-=#
