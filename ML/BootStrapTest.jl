@@ -9,7 +9,6 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-<<<<<<< HEAD
 type NodeData
     time::Float64  # in seconds since the epoch
     node::Int
@@ -19,8 +18,6 @@ end
 
 bbdata = NodeData[]
 
-=======
->>>>>>> master
 #Esben's path
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 path = "$(homedir())/Documents/GitHub/Thesis/Data"
@@ -31,20 +28,13 @@ path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #mainData = loadHousingData(path)
 #mainData = loadCPUData(path)
-<<<<<<< HEAD
 mainData = loadElevatorData(path)
-=======
-mainData, testdata = loadElevatorData(path)
->>>>>>> master
 mainData
 dataSize = size(mainData)
 colNames = names(mainData)
 colPredNames = colNames[1:18]
 
-<<<<<<< HEAD
 
-=======
->>>>>>> master
 #Converting it into a datamatrix instead of a dataframe
 combinedData = Array(mainData)
 nRows = size(combinedData)[1]
@@ -54,11 +44,7 @@ nCols = size(combinedData)[2]
 println("STAGE 1 INITIATED")
 #Define solve
 m = Model(solver = GurobiSolver())
-<<<<<<< HEAD
 addinfocallback(m, infocallback, when = :Other)
-=======
-
->>>>>>> master
 #Add binary variables variables
 @variable(m, 0 <= z[1:nCols] <= 1, Bin )
 
@@ -86,7 +72,6 @@ end
 #Get solution status
 status = solve(m)
 
-<<<<<<< HEAD
 open("bbtrack2.csv","w") do fp
     println(fp, "time,node,obj,bestbound")
     for bb in bbdata
@@ -94,8 +79,6 @@ open("bbtrack2.csv","w") do fp
     end
 end
 
-=======
->>>>>>> master
 #Get objective value
 println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
@@ -104,11 +87,7 @@ kmax = getobjectivevalue(m)
 #zSolved = getvalue(z)
 println("STAGE 1 DONE")
 
-<<<<<<< HEAD
 ### STAGE 2 ###
-=======
-### STAGE 2 ###
->>>>>>> master
 println("STAGE 2 INITIATED")
 println("Standardizing data")
 
@@ -123,16 +102,7 @@ X = expandWithTransformations(X)
 standX = zScoreByColumn(X)
 standY = zscore(y)
 
-<<<<<<< HEAD
 
-=======
-type NodeData
-	time::UInt64  # in nanoseconds
-	node::Int
-	obj::Float64
-	bestbound::Float64
-end
->>>>>>> master
 
 function infocallback(cb)
 	node      = MathProgBase.cbgetexplorednodes(cb)
@@ -276,11 +246,7 @@ function solveForBeta(x, y, k)
 
 		#INFORMATION CALLBACK
 		bbdata = NodeData[]
-<<<<<<< HEAD
 		addinfocallback(stage2Model, infocallback, when = :MIPNode)
-=======
-		addinfocallback(stage2Model, infocallback, when = :MIPInfo)
->>>>>>> master
 
 
 
@@ -288,18 +254,7 @@ function solveForBeta(x, y, k)
 		status = solve(stage2Model)
 		println("Objective value: ", getobjectivevalue(stage2Model))
 		println("BBDATA: ", bbdata)
-<<<<<<< HEAD
 
-=======
-		# Save results to file for analysis later
-		open("bbtrack.csv","w") do fp
-		    println(fp, "time,node,obj,bestbound")
-		    for bb in bbdata
-		        println(fp, bb.time, ",", bb.node, ",",
-		                    bb.obj, ",", bb.bestbound)
-		    end
-		end
->>>>>>> master
 
 
 		#Get solution and calculate R^2
@@ -321,7 +276,6 @@ function solveForBeta(x, y, k)
 end
 bbdata = NodeData[]
 bSolution = solveForBeta(standX, standY, 9)
-<<<<<<< HEAD
 # Save results to file for analysis later
 open("bbtrack.csv","w") do fp
 	println(fp, "time,node,obj,bestbound")
@@ -331,8 +285,6 @@ open("bbtrack.csv","w") do fp
 	end
 end
 
-=======
->>>>>>> master
 identifyParameters(bSolution, colPredNames)
 sampleSize = 50
 bCols = size(X)[2]
@@ -509,20 +461,12 @@ ci(bs1, BasicConfInt(cil)) #return t0, lower, upper
 
 #=
 bootstrapSE = std(samples,1)
-<<<<<<< HEAD
-=======
-
->>>>>>> master
 nullDistribution = samples
 pvalues = ones(rhoCols)
 for i=1:rhoCols
     nullDistribution[:,i] = nullDistribution[:,i]-mean(nullDistribution[:,i])
 end
 nullDistribution[:, rhoCols] = 1 + nullDistribution[:, rhoCols]
-<<<<<<< HEAD
-=======
-
->>>>>>> master
 pvalues = [mean(abs(MLE[i]).<abs(nullDistribution[:,i])) for i=1:rhoCols]
 for i=1:rhoCols
 	if pvalues[i] >= 0.05

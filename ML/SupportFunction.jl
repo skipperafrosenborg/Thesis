@@ -315,17 +315,12 @@ end
 """
 Generating samplesize amount of beta-values for a beta distribution
 """
-<<<<<<< HEAD
 function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma, allCuts, bestZ)
 	println("0% through samples")
-=======
-function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma)
->>>>>>> master
 	for i=1:sampleSize
 		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
-<<<<<<< HEAD
 		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts, bestZ);
 		#bSample[i,:] = solveForBetaClosedForm(sampleX, sampleY, k, bestZ)
 		if i == floor(sampleSize/2)
@@ -387,40 +382,11 @@ function solveForBeta(X, Y, k, gamma, allCuts, bestZ)
 	#println("Objective value: ", Gurobi.getobjval(TempStage2Model))
 
 	sol = Gurobi.getsolution(TempStage2Model);
-=======
-		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma)
-		println("Sample $i/$sampleSize is done")
-	end
-end
-
-function solveForBeta(X, Y, k, gamma)
-	stage2Model = buildStage2(X, Y, k)
-
-	#Set kMax rhs constraint
-	curLB = Gurobi.getconstrUB(stage2Model) #Get current UBbounds
-	curLB[bCols*4+2] = k #Change upperbound in current bound vector
-	Gurobi.setconstrUB!(stage2Model, curLB) #Push bound vector to model
-	Gurobi.updatemodel!(stage2Model)
-
-	#Set new Big M
-	newBigM = 3#tau*norm(warmStartBeta, Inf)
-	changeBigM(stage2Model,newBigM)
-
-	changeGamma(stage2Model, gamma)
-
-	println("Starting to solve stage 2 model with kMax = $k and gamma = $gamma")
-	#Solve Stage 2 model
-	status = Gurobi.optimize!(stage2Model)
-	println("Objective value: ", Gurobi.getobjval(stage2Model))
-
-	sol = Gurobi.getsolution(stage2Model)
->>>>>>> master
 	#Get solution and calculate R^2
 	bSolved = sol[1:bCols]
 	return bSolved
 end
 
-<<<<<<< HEAD
 function changeBigM(model, newBigM)
 	startIndx = bCols
 	for i in 1:bCols
@@ -472,8 +438,6 @@ function addCuts(model, cutMatrix, preCutCounter)
 end
 
 
-=======
->>>>>>> master
 """
 Creates a confidence interval based on confidence interval level and nBoot
 bootstrapped samples from the created beta distribution
@@ -517,7 +481,6 @@ function testSignificance(confIntArray99, confIntArray95, confIntArray90, bResul
 	end
 	return significance
 end
-<<<<<<< HEAD
 
 #using StatPlots
 #using Distributions
@@ -571,5 +534,3 @@ function JBTest(residuals)
 	end
     return boo
 end
-=======
->>>>>>> master

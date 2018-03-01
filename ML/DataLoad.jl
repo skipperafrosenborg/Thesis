@@ -10,7 +10,6 @@ function loadConcrete(path)
     return mainData
 end
 
-<<<<<<< HEAD
 function loadIndexData(path)
     cd(path)
     mainData = CSV.read("combinedIndexDataMod.csv", header=["NoDur","Durbl","Manuf","Enrgy","HiTec","Telcm","Shops",
@@ -19,8 +18,6 @@ function loadIndexData(path)
     return mainData
 end
 
-=======
->>>>>>> master
 function loadCPUData(path)
     cd(path)
     mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
