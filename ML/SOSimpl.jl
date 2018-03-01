@@ -1,239 +1,217 @@
-#Pkg.add("CSV");
-#Pkg.add("DataFrames");
-using JuMP
-using CPLEX
-using ConditionalJuMP
-using Gurobi
-using StatsBase
-using DataFrames
-using CSV
-include("SupportFunction.jl")
-println("Leeeeroooy Jenkins")
-
-using Bootstrap
-r = randn(100)
-
-n_boot = 1000
-
-## basic bootstrap
-bs1 = bootstrap(r, std, ResidualSampling(n_boot))
-
-## balanced bootstrap
-bs2 = bootstrap(r, std, BalancedSampling(n_boot))
-
-bias(bs1)
-se(bs1)
-
-## calculate 95% confidence intervals
-cil = 0.95;
-
-## basic CI
-bci1 = ci(bs1, BasicConfInt(cil));
-
-## percentile CI
-bci2 = ci(bs1, PercentileConfInt(cil));
-
-## BCa CI
-bci3 = ci(bs1, BCaConfInt(cil));
-
-## Normal CI
-bci4 = ci(bs1, NormalConfInt(cil));
-
-
-#Esben's path
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
-
-#Skipper's path
-#cd("/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data")
-
-#All on monthly data
-mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)
-#mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
-#	"MMIN","MMAX","CACH","CHMIN","CHMAX","PRP","ERP"], datarow=1, nullable=false)
-#mainData = copy(mainData[:,3:9])
-
-dataSize = size(mainData)
-nRowsMain = dataSize[1]
-nColsMain = dataSize[2]
-colNames = names(mainData)
-
-#Converting it into a datamatrix instead of a dataframe
-mainDataMatrix = Array(mainData)
-
-combinedData = copy(mainDataMatrix)
-nRows = size(combinedData)[1]
-nCols = size(combinedData)[2]
-
-### STAGE 1 ###
-println("STAGE 1 INITIATED")
-#Define solve
-m = Model(solver = CplexSolver())
-
-#Add binary variables variables
-@variable(m, 0 <= z[1:nCols] <= 1, Bin )
-
-#Calculate highly correlated matix
-HC = cor(combinedData)
-
-#Define objective function
-@objective(m, Max, sum(z[i] for i=1:length(z)))
-
-#Define max correlation and constraints
-rho = 0.8
-for i=1:length(z)
-	for j=1:length(z)
-		if i != j
-			if HC[i,j] >= rho
-				@constraint(m,z[i]+z[j] <= 1)
-			end
-		end
-	end
-end
-
-#Print model
-#print(m)
-
-#Get solution status
-status = solve(m)
-
-#Get objective value
-println("Objective value: ", getobjectivevalue(m))
-kmax = getobjectivevalue(m)
-
-#Get solution value
-zSolved = getvalue(z)
-println("STAGE 1 DONE")
-
-### STAGE 2 ###
-println("STAGE 2 INITIATED")
-println("Standardizing data")
-
-#Standardize data by coulmn
-y = combinedData[:,nColsMain]
-X = combinedData[:,1:nColsMain-1]
-
-### TRANSFORMATIONS ###
-X = combinedData[:,1:nColsMain-1]
-X = expandWithTransformations(X)
-
-standX = zScoreByColumn(X)
-standY = zscore(y)
-using Lasso
-using GLMNet
-LassoModel = fit(LassoPath, standX, standY, Normal(), standardize = false, cd_maxiter = 2000000)
-
-using GLM
-glm(@formula(standY ~ standX), )
-println("DOOOOOOOOOOOOOOOOOOOOOONE")
-#for i in 1:30
-#	warmStartBeta = gradDecent(standX, standY, 20000, 1e-6, 20)
-   	#println("Iteration $i:\t R^2 is:", getRSquared(standX, standY, warmStartBeta))
-#end
-
-kValue = []
-RsquaredValue = []
-HC = cor(X)
-for i in 1:2:kmax
-	println("Setup model")
-	#Define parameters and model
+function stageThree(bestBeta1, bestK1, bestGamma1, bestBeta2, bestK2, bestGamma2, bestBeta3, bestK3, bestGamma3, X, Y, allCuts)
+	#Condition Number
+	#A high condition number indicates a multicollinearity problem. A condition
+	# number greater than 15 is usually taken as evidence of
+	# multicollinearity and a condition number greater than 30 is
+	# usually an instance of severe multicollinearity
+	summary = zeros(3)
 	bCols = size(X)[2]
-
-	#stage2Model = Model(solver = CplexSolver(CPX_PARAM_TILIM = 400))
-	stage2Model = Model(solver = GurobiSolver(Presolve=-1, TimeLimit = 200))
-	gamma = 10
-
-	#Define variables
-	@variable(stage2Model, b[1:bCols])
-	@variable(stage2Model, T)
-	#@variable(stage2Model, O)
-
-	println("Calculating warmstart solution")
-	#Calculate warmstart
-	warmstartError = 1e6
-	warmStartBeta = []
-	for i in 1:20
-		warmStartBetaTemp = gradDecent(standX, standY, 20000, 1e-6, i)
-		tempError = norm(standY- standX*warmStartBetaTemp)
-		println("Warmstart error is:", norm(standY- standX*warmStartBetaTemp))
-		if tempError < warmstartError
-			warmstartError = tempError
-			warmStartBeta = warmStartBetaTemp
-
-	end
-
-	for j in 1:bCols
-		setvalue(b[j], warmStartBeta[j])
-	end
-
-	#Calculating bigM
-	tau = 2
-	bigM = tau*norm(warmStartBeta, Inf)
-
-	#Define objective function (5a)
-	@objective(stage2Model, Min, T)
-	@constraint(stage2Model, norm(standY - standX*b) <= T)
-
-	#Define binary variable (5b)
-	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
-
-	#Define constraints (5c)
-	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z)
-	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z)
-
-	#Define kmax constraint (5d)
-	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax)
-
-	#Constraint 5f - can only select one of a pair of highly correlated features
-	rho = 0.8
-	for k=1:bCols
-		for j=1:bCols
-			if k != j
-				if HC[k,j] >= rho
-					@constraint(stage2Model,z[k]+z[j] <= 1)
+	nRows = size(X)[1]
+	cuts = Matrix(0, bCols+1)
+	rowsPerSample = nRows #All of rows in training data to generate beta estimates, but selected with replacement
+	totalSamples = 25 #25 different times we will get a beta estimate
+	nBoot = 10000
+	for i=1:3
+		xColumns = []
+		bSample = Matrix(totalSamples, bCols)
+		if i == 1
+			bZeros = zeros(bCols)
+			for j = 1:bCols
+				if !isequal(bestBeta1[j],0)
+					push!(xColumns, j)
 				end
 			end
+			selectedX = X[:,xColumns]
+			condNumber = cond(selectedX)
+			if condNumber >= 15
+				bZeros[xColumns] = 1
+				subsetSize = size(xColumns)[1]
+				newCut1 = [bZeros' subsetSize]
+				cuts = [cuts; newCut1]
+				println("A cut based on Condition number = $condNumber has been created from Beta$i")
+			end
+
+			bestZ1 = zeros(bestBeta1)
+			for l=1:size(bestBeta1)[1]
+				if bestBeta1[l] != 0
+					bestZ1[l] = 1
+				end
+			end
+
+			# test significance
+			bZeros = zeros(bCols)
+			createBetaDistribution(bSample, X, Y, bestK1, totalSamples, rowsPerSample,  bestGamma1, allCuts, bestZ1) #standX, standY, k, sampleSize, rowsPerSample
+
+			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
+			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
+			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
+
+			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta1)
+			significanceResultNONSI = [] # = significanceResult[xColumns]
+			subsetSize = size(xColumns)[1]
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
+				end
+			end
+
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
+				newCut1 = [bZeros' subsetSize]
+				cuts = [cuts; newCut1]
+				println("A cut based on parameters being non-significant in Beta$i has been created")
+			end
+			if isempty(significanceResultNONSI)
+				summary[1]=1
+			end
+
+
+		elseif i == 2
+			bZeros = zeros(bCols)
+			for j = 1:bCols
+				if !isequal(bestBeta1[j],0)
+					push!(xColumns, j)
+				end
+			end
+			selectedX = X[:,xColumns]
+			condNumber = cond(selectedX)
+			if condNumber >= 15
+				bZeros[xColumns] = 1
+				subsetSize = size(xColumns)[1]
+				newCut2 = [bZeros' subsetSize]
+				status = false
+				if isequal(Array(newCut1), Array(newCut2))
+					println("IDENTICAL CUTS #############################################")
+				end
+
+				if !isempty(cuts)
+					cutRows = size(cuts)[1]
+					for r = 1:cutRows
+						if isequal(cuts[r,:], newCut)
+							status = true
+							println("Identical cut found")
+						end
+					end
+				end
+				if status == false
+					cuts = [cuts; newCut]
+				end
+				println("A cut based on Condition number = $condNumber has been created from Beta$i")
+			end
+
+
+			bestZ2 = zeros(bestBeta2)
+			for l=1:size(bestBeta2)[1]
+				if bestBeta2[l] != 0
+					bestZ2[l] = 1
+				end
+			end
+
+			# test significance
+			bZeros = zeros(bCols)
+			createBetaDistribution(bSample, X, Y, bestK2, totalSamples, rowsPerSample,  bestGamma2, allCuts, bestZ2) #standX, standY, k, sampleSize, rowsPerSample
+			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
+			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
+			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
+
+			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta2)
+			significanceResultNONSI = [] # = significanceResult[xColumns]
+			subsetSize = size(xColumns)[1]
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
+				end
+			end
+
+
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
+				newCut = [bZeros' subsetSize]
+				cuts = [cuts; newCut]
+				println("A cut based on parameters being non-significant in Beta$i has been created")
+			end
+			if isempty(significanceResultNONSI)
+				summary[2]=1
+			end
+
+		else
+			bZeros = zeros(bCols)
+			for j = 1:bCols
+				if !isequal(bestBeta3[j],0)
+					push!(xColumns, j)
+				end
+			end
+			selectedX = X[:,xColumns]
+			condNumber = cond(selectedX)
+			if condNumber >= 15
+				bZeros[xColumns] = 1
+				subsetSize = size(xColumns)[1]
+				newCut = [bZeros' subsetSize]
+				cuts = [cuts; newCut]
+				println("A cut based on Condition number = $condNumber has been created from Beta$i")
+			end
+
+			bestZ3 = zeros(bestBeta3)
+			for l=1:size(bestBeta3)[1]
+				if bestBeta3[l] != 0
+					bestZ3[l] = 1
+				end
+			end
+			# test significance
+			bZeros = zeros(bCols)
+			createBetaDistribution(bSample, X, Y, bestK3, totalSamples, rowsPerSample,  bestGamma3, allCuts, bestZ3) #standX, standY, k, sampleSize, rowsPerSample
+			confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
+			confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
+			confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
+
+			significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta3)
+			significanceResultNONSI = [] # = significanceResult[xColumns]
+			subsetSize = size(xColumns)[1]
+			for n = 1:size(significanceResult)[1]
+				for s = 1:subsetSize
+					if significanceResult[n] == 0 && xColumns[s] == n
+						push!(significanceResultNONSI,xColumns[s])
+						println("Parameter $n is selected, but NOT significant")
+					elseif significanceResult[n] > 0 && xColumns[s] == n
+						println("Parameter $n is significant with ", significanceResult[n])
+					end
+				end
+			end
+
+
+			if !isempty(significanceResultNONSI)
+				bZeros[significanceResultNONSI] = 1
+				subsetSize = size(significanceResultNONSI)[1]
+				newCut = [bZeros' subsetSize]
+				cuts = [cuts; newCut]
+				println("A cut based on parameters being non-significant in Beta$i has been created")
+			end
+			if isempty(significanceResultNONSI)
+				summary[3]=1
+			end
+
 		end
 	end
-
-	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nColsMain-1)
-		@constraint(stage2Model, z[j]+z[j+(nColsMain-1)]+z[j+2*(nColsMain-1)]+z[j+3*(nColsMain-1)] <= 1)
+	if summary[1] == 1
+		println("Beta1 is significant!")
 	end
-
-	#=
-	@variable(stage2Model, v[1:bCols])
-	for i=1:bCols
-		@constraint(stage2Model, b[i]  <= v[i])
-		@constraint(stage2Model, -b[i] <= v[i])
+	if summary[2] == 1
+		println("Beta2 is significant!")
 	end
-
-	@constraint(stage2Model, sum(v[i] for i=1:bCols) <= O)
-	=#
-
-	#Set kMax rhs constraint
-	JuMP.setRHS(kMaxConstr, i)
-	println("Starting to solve stage 2 model with kMax = $i")
-
-	#print(stage2Model)
-
-	warmstart!(stage2Model)
-	println("Warmstart succes!")
-
-	#Solve Stage 2 model
-	status = solve(stage2Model)
-	println("Objective value: ", getobjectivevalue(stage2Model))
-
-	#Get solution and calculate R^2
-	bSolved = getvalue(b)
-	zSolved = getvalue(z)
-	Rsquared = getRSquared(standX,standY,bSolved)
-	push!(kValue, i)
-	push!(RsquaredValue, Rsquared)
-	println("Rsquared value is: $Rsquared")
-
-	#printNonZeroValues(bSolved)
+	if summary[3] == 1
+		println("Beta3 is significant!")
+	end
+	return cuts
 end
-println("STAGE 2 DONE")
-bestRsquared = maximum(RsquaredValue)
-kBestSol = kValue[indmax(RsquaredValue)]
-println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
