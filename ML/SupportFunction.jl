@@ -134,6 +134,14 @@ function getRSquared(X,y,betaSolve)
     return Rsquared
 end
 
+function getRMSE(X,y,betaSolve)
+    SSres = sum((y[i] - X[i,:]'*betaSolve)^2 for i=1:length(y))
+	n=length(y)
+	RMSE = sqrt(SSres/n)
+	return RMSE
+end
+
+
 """
 Function that prints the non zero solutions values of beta
 """
@@ -194,6 +202,30 @@ function expandWithTransformations(X)
 	#Ensure we return a Float64 array
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
+end
+
+"""
+Function that returns all the column names including ^2, log(), sqrt()
+"""
+function expandedColNamesToString(colNames)
+	masterString = ""
+	for i=1:length(colNames)-1
+		masterString = masterString*string(colNames[i])*","
+	end
+
+	for i=1:length(colNames)-1
+		masterString = masterString*string(colNames[i])*"^2,"
+	end
+
+	for i=1:length(colNames)-1
+		masterString = masterString*"ln("*string(colNames[i])*"),"
+	end
+
+	for i=1:length(colNames)-1
+		masterString = masterString*"sqrt("*string(colNames[i])*"),"
+	end
+
+	return masterString
 end
 
 """
@@ -399,6 +431,15 @@ end
 function changeGamma(model, newGamma)
 	startRow  = bCols*4+1
 	startIndx = bCols*2
+	for i in 1:bCols
+		Gurobi.changecoeffs!(model, [startRow], [startIndx+i], [newGamma])
+		Gurobi.updatemodel!(model)
+	end
+end
+
+function changeGammaLasso(model, newGamma)
+	startRow  = bCols*2+1
+	startIndx = bCols
 	for i in 1:bCols
 		Gurobi.changecoeffs!(model, [startRow], [startIndx+i], [newGamma])
 		Gurobi.updatemodel!(model)

@@ -1,6 +1,4 @@
 using JuMP
-#using CPLEX
-#using ConditionalJuMP
 using Gurobi
 using StatsBase
 using DataFrames
@@ -18,10 +16,14 @@ println("Leeeeroooy Jenkins")
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
-#mainData = loadIndexData(path)
-mainData = loadConcrete(path)
+#mainData = loadIndexDataNoDur(path)
+#fileName = path*"/Results/IndexData/IndexData"
+#mainData = loadConcrete(path)
+#fileName = path*"/Results/Concrete/Concrete"
 #mainData = loadHousingData(path)
-#mainData = loadCPUData(path)
+#fileName = path*"/Results/HousingData/HousingData"
+mainData = loadCPUData(path)
+fileName = path*"/Results/CPUData/CPUData"
 
 #Reset HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
@@ -117,13 +119,12 @@ standYVali = zscore(yVali)
 
 
 # Output for Lasso regression in R
-#writedlm("concreteXTrain.CSV",standX,",")
-#writedlm("concreteYTrain.CSV",standY,",")
-#writedlm("concreteXTest.CSV",standXTest,",")
-#writedlm("concreteYTest.CSV",standYTest,",")
-#writedlm("concreteXVali.CSV",standXVali,",")
-#writedlm("concreteYVali.CSV",standYVali,",")
-
+writedlm(fileName*"XTrain.CSV",standX,",")
+writedlm(fileName*"YTrain.CSV",standY,",")
+writedlm(fileName*"XTest.CSV",standXTest,",")
+writedlm(fileName*"YTest.CSV",standYTest,",")
+writedlm(fileName*"XVali.CSV",standXVali,",")
+writedlm(fileName*"YVali.CSV",standYVali,",")
 
 #Initialise values for check later
 bCols = size(X)[2]
@@ -139,7 +140,7 @@ startIter = 1
 bigM = 100
 tau = 2
 
-stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 200))
+stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30))
 SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
 amountOfGammas = 5
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
@@ -152,7 +153,7 @@ function buildStage2(standX, standY, kmax)
 	HCPairCounter = 0
 	#println("Building model")
 	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 200, OutputFlag = 0));
+	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 20, OutputFlag = 0));
 	gamma = 10
 
 	#Define variables
@@ -263,6 +264,144 @@ function buildStage2(standX, standY, kmax)
 
 	return internalmodel(stage2Model), HCPairCounter
 end
+
+function buildLasso(standX, standY)
+	#Define parameters and model
+	lassoModel = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 0));
+	gamma = 10
+
+	#Define variables
+	@variable(lassoModel, b[1:bCols]) #Beta values
+
+	@variable(lassoModel, v[1:bCols]) # auxiliary variables for abs
+
+	@variable(lassoModel, T) #First objective term
+	@variable(lassoModel, G) #Second objective term
+
+	#Define objective function (5a)
+	@objective(lassoModel, Min, T+G)
+
+	#println("Trying to implement new constraint")
+	xSquareExpr = @expression(lassoModel, 0*b[1]^2)
+	for l = 1:bCols
+		coef = 0
+		for j = 1:nRows
+		   coef += standX[j,l]^(2)
+		end
+		append!(xSquareExpr, @expression(lassoModel, coef*b[l]^2))
+	end
+	#println("Implemented x^2")
+
+	ySquaredExpr = @expression(lassoModel, 0*b[1])
+	for j = 1:nRows
+		append!(ySquaredExpr,@expression(lassoModel, standY[j,1]^2))
+	end
+	#println("Implemented y^2")
+
+	simpleBetaExpr = @expression(lassoModel, 0*b[1])
+	for l = 1:bCols
+		coef = 0
+		for j = 1:nRows
+			coef += -1*2*standX[j, l]*standY[j]
+		end
+		append!(simpleBetaExpr, @expression(lassoModel, coef*b[l]))
+	end
+	#println("Implemented simpleBetaExpr")
+
+	crossBetaExpr = @expression(lassoModel, 0*b[1]*b[2])
+	iter = 1
+	for l = 1:bCols
+		for k = (l + 1):bCols
+			coef = 0
+			for j = 1:nRows
+				coef += 2*standX[j,l]*standX[j,k]
+			end
+			append!(crossBetaExpr, @expression(lassoModel, coef*b[l,1]*b[k,1]))
+		end
+		#println("Finished loop $l/$bCols")
+	end
+	#println("Implemented crossBetaExpr")
+	totalExpr = @expression(lassoModel, crossBetaExpr+simpleBetaExpr+xSquareExpr+ySquaredExpr)
+	@constraint(lassoModel, quadConst, totalExpr <= T)
+	#println("Successfully added quadratic constraints")
+
+	#Second objective term
+	@constraint(lassoModel, 1*b .<= v) #from 2bCols to 3bCols-1
+	@constraint(lassoModel, -1*b .<= v) #from 3bCols to 4bCols-1
+	oneNorm = sum(v[i] for i=1:bCols)
+
+	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
+	@constraint(lassoModel, gammaConstr, 1*oneNorm <= G) #4bCols
+
+	JuMP.build(lassoModel)
+
+	return internalmodel(lassoModel)
+end
+
+function solveLasso(model)
+	bestNBeta = zeros(bCols+1,bCols+3)
+	for i=1:bCols+1
+		bestNBeta[i,1] = i-1
+	end
+
+	println("Solving Lasso for all gamma")
+	gammaArray = logspace(0, 3, 1000)
+	gamma = 0
+	tol = 1e-6
+
+	open(fileName*"LassoLog.csv", "w") do f
+		allColNames = expandedColNamesToString(colNames)
+		write(f, "RsquaredValue, gamma, nNZ, $allColNames\n")
+		for j in 1:length(gammaArray)
+			gamma = gammaArray[j]
+			changeGammaLasso(model, gamma)
+
+			#Gurobi.writeproblem(model, "testproblem.lp")
+
+			#solve problem
+			status = Gurobi.optimize!(model)
+
+			#Get solution
+			sol = Gurobi.getsolution(model)
+
+			#Get parameters
+			bSolved = sol[1:bCols]
+
+			#Shrink values to 0 if within tolerance "tol"
+			for i=1:length(bSolved)
+				if bSolved[i] < tol
+					if bSolved[i] > -tol
+						bSolved[i] = 0
+					end
+				end
+			end
+
+			#Out of sample test
+			Rsquared = getRSquared(standXVali,standYVali,bSolved)
+
+			#Count number of non zero elements
+			numNZ = countnz(bSolved)
+
+			if Rsquared > bestNBeta[numNZ+1,2]
+				bestNBeta[numNZ+1,2] = Rsquared
+				bestNBeta[numNZ+1,3] = gamma
+				bestNBeta[numNZ+1,4:bCols+3] = bSolved
+			end
+
+			write(f, "$Rsquared, $gamma, $numNZ, $bSolved\n")
+			#println("Rsquared =$Rsquared \t gamma =$j \t n NZ=$numNZ")
+		end
+	end
+	f = open(fileName*"LassoBestK.csv", "w")
+	write(f, "k,Rsquared,gamma,"*expandedColNamesToString(colNames)*"\n")
+	writecsv(f,bestNBeta)
+	close(f)
+	println("Solve all Lasso problems")
+	return bestNBeta
+end
+
+lassoM = buildLasso(standX, standY)
+bestNLASSO = solveLasso(lassoM)
 
 stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
 
@@ -375,13 +514,130 @@ function solveForAllK(model, kmax)
 			solArr[Int64((i-1)*length(gammaArray)+j),3] = Rsquared
 			push!(kValue, (i-1)*length(gammaArray)+j)
 			push!(RsquaredValue, Rsquared)
-			#println("Rsquared value is: $Rsquared for kMax = $i")
+			#println("Rsquared =$Rsquared\t kMax =$i \t gamma =$j")
 		end
 		#printNonZeroValues(bSolved)
 	end
+
 	return best3Beta, solArr, model
 end
 
+function solveAndLogForAllK(model, kmax)
+	best3Beta = zeros(3,bCols+3)
+	solArr = zeros(kmax*length(gammaArray),3)
+	println("Solving for all k and gamma")
+	open(fileName*"AALRLog.csv", "w") do f
+		allColNames = expandedColNamesToString(colNames)
+		write(f, "RsquaredValue,gamma,k, $allColNames\n")
+		for i in 1:1:kmax
+			#println("Calculating warmstart solution")
+
+			#=
+			#Calculate warmstart
+			warmStartError = 1e6
+			for j in 1:5
+				warmStartBetaTemp = gradDecent(standX, standY, 30000, 1e-3, i, HC, bSolved)
+				tempError = norm(standY- standX*warmStartBetaTemp)^2
+				println("Iteration $j of 5: Warmstart error is:", tempError)
+				if tempError < warmStartError
+					warmStartError = copy(tempError)
+					warmStartBeta = copy(warmStartBetaTemp)
+					println("Iteration $j of 5: Changed warmstartBeta")
+				end
+			end
+
+			println("Warmstart error is:", warmStartError)
+
+			#Set warmstart values
+			startVar = zeros(length(warmStartBeta)*3+2)
+			warmstartZ = zeros(warmStartBeta)
+			for j in 1:bCols
+				startVar[j] = warmStartBeta[j]
+				startVar[j+2*bCols] = abs(warmStartBeta[j])
+				if isequal(warmStartBeta[j],0)
+					startVar[j+bCols] = 0
+				else
+					startVar[j+bCols] = 1
+					warmstartZ[j] = 1
+				end
+			end
+			startVar[bCols*3+1] = 10000
+			startVar[bCols*3+2] = 10000
+
+			Gurobi.setwarmstart!(m2,startVar)
+			=#
+
+			#Set kMax rhs constraint
+			curUB = Gurobi.getconstrUB(model) #Get current UBbounds
+			curUB[bCols*4+2] = i #Change upperbound in current bound vector
+			Gurobi.setconstrUB!(model, curUB) #Push bound vector to model
+			Gurobi.updatemodel!(model)
+
+			#Set new Big M
+			newBigM = 3#tau*norm(warmStartBeta, Inf)
+			changeBigM(model,newBigM)
+			for j in 1:length(gammaArray)
+				gamma=gammaArray[j]
+				changeGamma(model, gammaArray[j])
+
+				#println("Starting to solve stage 2 model with kMax = $i and gamma = $j")
+
+				Gurobi.writeproblem(model, "testproblem.lp")
+
+				#Solve Stage 2 model
+				status = Gurobi.optimize!(model)
+				#println("Objective value: ", Gurobi.getobjval(model))
+
+				sol = Gurobi.getsolution(model)
+
+				#printSolutionToCSV("lars.csv", bbdata)
+				#Get solution and calculate R^2
+				bSolved = sol[1:bCols]
+				zSolved = sol[1+bCols:2*bCols]
+
+				#Out of sample test
+				Rsquared = getRSquared(standXVali,standYVali,bSolved)
+
+				if Rsquared > best3Beta[1,1] #largest than 3rd largest Rsquared
+					if Rsquared > best3Beta[2,1] #largest than 2nd largest Rsquared
+						if Rsquared > best3Beta[3,1] #largest than largest Rsquared
+							best3Beta[1,:] = best3Beta[2,:]
+							best3Beta[2,:] = best3Beta[3,:]
+							best3Beta[3,1] = Rsquared
+							best3Beta[3,2] = i
+							best3Beta[3,3] = j #potentially store actual gamma value
+							best3Beta[3,4:bCols+3] = bSolved
+						else
+							best3Beta[1,:] = best3Beta[2,:]
+							best3Beta[2,1] = Rsquared
+							best3Beta[2,2] = i
+							best3Beta[2,3] = j #potentially store actual gamma value
+							best3Beta[2,4:bCols+3] = bSolved
+						end
+					else
+						best3Beta[1,1] = Rsquared
+						best3Beta[1,2] = i
+						best3Beta[1,3] = j #potentially store actual gamma value
+						best3Beta[1,4:bCols+3] = bSolved
+					end
+				end
+
+				if any(Rsquared .> RsquaredValue) || isempty(RsquaredValue)
+					bestBeta = bSolved
+				end
+				solArr[Int64((i-1)*length(gammaArray)+j),1] = i
+				solArr[Int64((i-1)*length(gammaArray)+j),2] = j
+				solArr[Int64((i-1)*length(gammaArray)+j),3] = Rsquared
+				push!(kValue, (i-1)*length(gammaArray)+j)
+				push!(RsquaredValue, Rsquared)
+				println("Rsquared =$Rsquared\t kMax =$i \t gamma =$j")
+				write(f, "$Rsquared,$gamma,$i,$bSolved\n")
+			end
+			#printNonZeroValues(bSolved)
+		end
+	end
+	return best3Beta, solArr, model
+end
 
 #="""
 For each of the three beta sets produced, we will test for significance
@@ -478,20 +734,15 @@ function stageThree(best3Beta, X, Y, allCuts)
 	return cuts
 end
 
-#println("STAGE 2 DONE")
-#bestRsquared = maximum(RsquaredValue)
-#kBestSol = kValue[indmax(RsquaredValue)]
-#println("Bets solution found is: R^2 = $bestRsquared, k = $kBestSol")
-
 bSample = []
 allCuts = []
 signifBoolean = zeros(3)
 
 stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
 
-Gurobi.writeproblem(stage2Model, "testproblem1.lp")
+#Gurobi.writeproblem(stage2Model, "testproblem1.lp")
 
-best3Beta, solArr, stage2Model = solveForAllK(stage2Model, kmax)
+best3Beta, solArr, stage2Model = solveAndLogForAllK(stage2Model, kmax)
 
 cuts = stageThree(best3Beta, standX, standY, allCuts)
 
@@ -521,7 +772,7 @@ while !isempty(cuts)
 	Gurobi.updatemodel!(stage2Model)
 	Gurobi.writeproblem(stage2Model, "testproblem2.lp")
 	#println(stage2Model)
-	best3Beta, solArr = solveForAllK(stage2Model, kmax)
+	best3Beta, solArr = solveAndLogForAllK(stage2Model, kmax)
 
 	#Stage 3
 	cuts = stageThree(best3Beta, standX, standY, allCuts)
@@ -533,4 +784,12 @@ while !isempty(cuts)
 end
 
 best3Beta
+
+f = open(fileName*"AALRBestK.csv", "w")
+write(f, "Rsquared,k,gamma,"*expandedColNamesToString(colNames)*"\n")
+writecsv(f,best3Beta)
+close(f)
+#println(getRMSE(standXTest, standYTest, best3Beta[1,4:111]))
+#println(getRMSE(standXTest, standYTest, best3Beta[2,4:111]))
+#println(getRMSE(standXTest, standYTest, best3Beta[3,4:111]))
 Gurobi.writeproblem(stage2Model, "testproblem3.lp")
