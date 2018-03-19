@@ -16,14 +16,14 @@ println("Leeeeroooy Jenkins")
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
-#mainData = loadIndexDataNoDur(path)
-#fileName = path*"/Results/IndexData/IndexData"
+mainData = loadIndexDataNoDur(path)
+fileName = path*"/Results/IndexData/IndexData"
 #mainData = loadConcrete(path)
 #fileName = path*"/Results/Concrete/Concrete"
 #mainData = loadHousingData(path)
 #fileName = path*"/Results/HousingData/HousingData"
-mainData = loadCPUData(path)
-fileName = path*"/Results/CPUData/CPUData"
+#mainData = loadCPUData(path)
+#fileName = path*"/Results/CPUData/CPUData"
 
 #Reset HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
