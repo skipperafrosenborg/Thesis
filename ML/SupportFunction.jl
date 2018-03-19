@@ -205,6 +205,187 @@ function expandWithTransformations(X)
 end
 
 """
+Transforming X with time elements -3, -6 and -12
+"""
+function expandWithTime3612(X)
+	println("Transforming with t-3, t-6 and t-12")
+	#the first row is -1 already, so it will be row +2, +5 and +11
+	expandedX = copy(Array{Float64}(X))
+	xCols = size(expandedX)[2]
+	xRows = size(expandedX)[1]
+
+	# -3 time series
+	for i=1:xCols
+		insertArray = []
+		for j=1:(xRows-2)
+			push!(insertArray, expandedX[j+2,i])
+		end
+		for j=(xRows-1):(xRows)
+			push!(insertArray, 0)
+		end
+		expandedX = hcat(expandedX, insertArray)
+	end
+
+	# -6 time series
+	for i=1:xCols
+		insertArray = []
+		for j=1:(xRows-5)
+			push!(insertArray, expandedX[j+5,i])
+		end
+		for j=(xRows-4):(xRows)
+			push!(insertArray, 0)
+		end
+		expandedX = hcat(expandedX, insertArray)
+	end
+
+	# -12 time series
+	for i=1:xCols
+		insertArray = []
+		for j=1:(xRows-11)
+			push!(insertArray, expandedX[j+11,i])
+		end
+		for j=(xRows-10):(xRows)
+			push!(insertArray, 0)
+		end
+		expandedX = hcat(expandedX, insertArray)
+	end
+
+	#Ensure we return a Float64 array
+	expandedX = copy(Array{Float64}(expandedX))
+	return expandedX
+end
+
+"""
+Transforming X with moving average and momentum signals
+"""
+function expandWithMAandMomentum(X, Y, originalColumns)
+	println("Transforming with momentum (9, 12) and MA(1,2,3 & 9,12) ")
+	#the first row is -1 already, so it will be row +2, +5 and +11
+	expandedX = copy(Array{Float64}(X))
+	xCols = originalColumns
+	xRows = size(expandedX)[1]
+	#Already have moving average for s=1, since that our base row.
+
+	#s=2 would be the average of the last 2 observations
+	MAs2arr = []
+	for j=1:(xRows-2)
+		push!(MAs2arr, sum(Y[s] for s=(j+1):(j+2))/2)
+	end
+	for j=(xRows-1):(xRows)
+		push!(MAs2arr,0)
+	end
+
+	#s=3 would be the average of the last 3 observations
+	MAs3arr = []
+	for j=1:(xRows-3)
+		push!(MAs3arr, sum(Y[s] for s=(j+1):(j+3))/3)
+	end
+	for j=(xRows-2):(xRows)
+		push!(MAs3arr,0)
+	end
+
+	#l=9 would be the average of the last 9 observations
+	MAl9arr = []
+	for j=1:(xRows-9)
+		push!(MAl9arr, sum(Y[s] for s=(j+1):(j+9))/9)
+	end
+	for j=(xRows-8):(xRows)
+		push!(MAl9arr,0)
+	end
+
+	#l=12 would be the average of the last 12 observations
+	MAl12arr = []
+	for j=1:(xRows-12)
+		push!(MAl12arr, sum(Y[s] for s=(j+1):(j+12))/12)
+	end
+	for j=(xRows-11):(xRows)
+		push!(MAl12arr,0)
+	end
+
+	#Compare s=1 and l=9 and create a column of buy signals
+	#then do the same for s=2, 3 vs l=9
+	#then l=12 vs. s=1,2,3
+	MAMatrix = zeros(xRows, 6)
+	#check s=1 and l=9
+	for j=1:xRows
+		if Y[j] >= MAl9arr[j]
+			MAMatrix[j, 1] = 1
+		end
+	end
+	#check s=2 and l=9
+	for j=1:xRows
+		if MAs2arr[j] >= MAl9arr[j]
+			MAMatrix[j, 2] = 1
+		end
+	end
+	#check s=3 and l=9
+	for j=1:xRows
+		if MAs3arr[j] >= MAl9arr[j]
+			MAMatrix[j, 3] = 1
+		end
+	end
+
+	#check s=1 and l=9
+	for j=1:xRows
+		if Y[j] >= MAl12arr[j]
+			MAMatrix[j, 4] = 1
+		end
+	end
+	#check s=2 and l=9
+	for j=1:xRows
+		if MAs2arr[j] >= MAl12arr[j]
+			MAMatrix[j, 5] = 1
+		end
+	end
+	#check s=3 and l=9
+	for j=1:xRows
+		if MAs3arr[j] >= MAl12arr[j]
+			MAMatrix[j, 6] = 1
+		end
+	end
+
+	expandedX = hcat(expandedX, MAMatrix)
+
+
+	# MOMENTUM
+	# If a stock is higher then it was m periods ago, it has MOMENTUM
+	# computing for m=9
+	Mom9arr = []
+	for j=1:(xRows-9)
+		if Y[j] > Y[j+9]
+			push!(Mom9arr, 1)
+		else
+			push!(Mom9arr, 0)
+		end
+	end
+	for j=(xRows-8):(xRows)
+		push!(Mom9arr,0)
+	end
+
+	expandedX = hcat(expandedX, Mom9arr)
+
+	# computing for m=9
+	Mom12arr = []
+	for j=1:(xRows-12)
+		if Y[j] > Y[j+12]
+			push!(Mom12arr, 1)
+		else
+			push!(Mom12arr, 0)
+		end
+	end
+	for j=(xRows-11):(xRows)
+		push!(Mom12arr,0)
+	end
+
+	expandedX = hcat(expandedX, Mom12arr)
+
+	#Ensure we return a Float64 array
+	expandedX = copy(Array{Float64}(expandedX))
+	return expandedX
+end
+
+
+"""t
 Function that returns all the column names including ^2, log(), sqrt()
 """
 function expandedColNamesToString(colNames)
@@ -283,6 +464,11 @@ function createSampleY(y, inputRows)
 	outputY = inputY[inputRows,:]
 	return outputY
 end
+
+"""
+Creates a sample of random rows without replacement.
+Not useful for financial data, if we want a timeseries.
+"""
 
 function selectSampleRows(rowsWanted, nRows)
 	rowsSelected = sample(1:nRows, rowsWanted, replace = false)

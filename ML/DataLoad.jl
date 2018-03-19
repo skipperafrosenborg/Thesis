@@ -20,6 +20,86 @@ function loadIndexDataNoDur(path)
     return mainData
 end
 
+function loadIndexDataDailyNoDur(path)
+    cd(path)
+    mainData = CSV.read("dailyNoDurReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyDurbl(path)
+    cd(path)
+    mainData = CSV.read("dailyDurblReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyManuf(path)
+    cd(path)
+    mainData = CSV.read("dailyManufReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyEnrgy(path)
+    cd(path)
+    mainData = CSV.read("dailyEnrgyReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyHiTec(path)
+    cd(path)
+    mainData = CSV.read("dailyHiTecReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyTelcm(path)
+    cd(path)
+    mainData = CSV.read("dailyTelcmReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyShops(path)
+    cd(path)
+    mainData = CSV.read("dailyShopsReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyHlth(path)
+    cd(path)
+    mainData = CSV.read("dailyHlthReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyUtils(path)
+    cd(path)
+    mainData = CSV.read("dailyUtilsReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
+function loadIndexDataDailyOther(path)
+    cd(path)
+    mainData = CSV.read("dailyOtherReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index"],
+        delim = ',', nullable=false, types=Dict(11=>Float64))
+    return mainData
+end
+
 function loadCPUData(path)
     cd(path)
     mainData = CSV.read("machine.data", header=["vendor name","Model name","MYCT",
