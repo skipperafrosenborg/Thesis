@@ -15,7 +15,7 @@ println("Leeeeroooy Jenkins")
 #Skipper's path
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 mainData = loadIndexDataNoDur(path)
 fileName = path*"/Results/IndexData/IndexData"
 #mainData = loadConcrete(path)
@@ -63,6 +63,53 @@ OOSR = zeros(nGammas, testRuns)
 Indi = zeros(nGammas, testRuns)
 gammaArray = logspace(0, 2, nGammas)
 
+Xtrain = allData[:, 1:bCols]
+trainingData = Xtrain[:,1:nCols-1]
+
+### STAGE 1 ###
+println("STAGE 1 INITIATED")
+#Define solve
+m = JuMP.Model(solver = GurobiSolver(OutputFlag =0 ))
+
+#Add binary variables variables
+@variable(m, 0 <= z[1:nCols-1] <= 1, Bin )
+
+#Calculate highly correlated matix
+HC = cor(trainingData)
+
+#Define objective function
+@objective(m, Max, sum(z[i] for i=1:length(z)))
+
+#Define max correlation and constraints
+rho = 0.8
+for i=1:length(z)
+    for j=1:length(z)
+        if i != j
+            if HC[i,j] >= rho
+                @constraint(m,z[i]+z[j] <= 1)
+            end
+        end
+    end
+end
+
+#Print model
+#print(m)
+
+#Get solution status
+status = solve(m);
+
+#Get objective value
+println("Objective value kMax: ", getobjectivevalue(m))
+kmax = getobjectivevalue(m)
+
+#Get solution value
+#zSolved = getvalue(z)
+println("STAGE 1 DONE")
+
+amountOfGammas = 5
+solArr = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
+realArr = solArr = zeros((nRows-trainingSize-predictions), 1)
+
 for r = 1:(nRows-trainingSize-predictions)
 	Xtrain = allData[r:(trainingSize+r), 1:bCols]
     trainingData = Xtrain[:,1:nCols-1]
@@ -85,45 +132,6 @@ nCols = size(trainingData)[2]
 
 function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     nRows = size(standX)[1]
-    ### STAGE 1 ###
-    println("STAGE 1 INITIATED")
-    #Define solve
-    m = JuMP.Model(solver = GurobiSolver(OutputFlag =0 ))
-
-    #Add binary variables variables
-    @variable(m, 0 <= z[1:nCols-1] <= 1, Bin )
-
-    #Calculate highly correlated matix
-    HC = cor(trainingData)
-
-    #Define objective function
-    @objective(m, Max, sum(z[i] for i=1:length(z)))
-
-    #Define max correlation and constraints
-    rho = 0.8
-    for i=1:length(z)
-    	for j=1:length(z)
-    		if i != j
-    			if HC[i,j] >= rho
-    				@constraint(m,z[i]+z[j] <= 1)
-    			end
-    		end
-    	end
-    end
-
-    #Print model
-    #print(m)
-
-    #Get solution status
-    status = solve(m);
-
-    #Get objective value
-    println("Objective value kMax: ", getobjectivevalue(m))
-    kmax = getobjectivevalue(m)
-
-    #Get solution value
-    #zSolved = getvalue(z)
-    println("STAGE 1 DONE")
 
     ### STAGE 2 ###
     println("STAGE 2 INITIATED")
@@ -153,7 +161,7 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
     stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30))
     SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-    amountOfGammas = 5
+
     #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
     gammaArray = log10.(logspace(0, log10.(SSTO), amountOfGammas))
 
@@ -397,7 +405,6 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
     function solveAndLogForAllK(model, kmax)
     	best3Beta = zeros(3,bCols+3)
-    	solArr = zeros(kmax*length(gammaArray),3)
     	println("Solving for all k and gamma")
     	open(fileName*"AALRLog.csv", "w") do f
     		allColNames = expandedColNamesToString(colNames)
@@ -435,7 +442,8 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
                     prediction = standXVali*bSolved
 
     				println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$j")
-    				write(f, "$prediction,$standYVali,$gamma,$i,$r\n")
+                    solArr[r,(i-1)*amountOfGammas+j] = prediction[1]
+                    realArr[r,1] = $standYVali
     			end
     			#printNonZeroValues(bSolved)
     		end
