@@ -8,9 +8,9 @@ library(date)
 library(zoo)
 library(marima)
 library(vars)
-library(LSTS)
 
-setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data")
+
+setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns")
 data = read.csv("Monthly - Average Equal Weighted Returns.csv", header =T)
 data$Average = rowMeans(data[,2:11], na.rm = TRUE)
 data$CumSumAverage = cumsum(data$Average)
@@ -31,7 +31,6 @@ str(data)
 
 str(data)
 nCols = ncol(data)
-ceiling(10/3)
 
 names(data)[2]
 plotRows = 3
@@ -64,10 +63,10 @@ for(i in 2:initCols){
 plot.new()
 par(mfrow=c(plotRows, plotCols))
 for(i in 2:split){
-  boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-30, 70))
+  boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
 for(i in (split+2):initCols-1){
-  boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-30, 70))
+  boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
 #No statistical difference between months at all
 
@@ -75,10 +74,10 @@ for(i in (split+2):initCols-1){
 plot.new()
 par(mfrow=c(plotRows, plotCols))
 for(i in 2:split){
-  boxplot(data[,i] ~ data$Year, main = paste("Yearly Boxplots for", names(data)[i], "Returns"),ylim=c(-30, 70))
+  boxplot(data[,i] ~ data$Year, main = paste("Yearly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
 for(i in (split+1):(initCols-1)){
-  boxplot(data[,i] ~ data$Year, main = paste("Yearly Boxplots for", names(data)[i], "Returns"),ylim=c(-30, 70))
+  boxplot(data[,i] ~ data$Year, main = paste("Yearly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
 #not exactly stationary, especially around financial crisis in 1929
 
@@ -96,30 +95,45 @@ for(i in (split+1):(initCols-1)){
 }
 
 
-##### EQUITY PREDICTION FACTORS -----
-library(readxl)
-predictorData = read.csv("PredictorData2016.csv", sep = ";", header = T)
-predRows = dim(predictorData)[1]
-names(predictorData)[1] = "YM2"
-YM2 = predictorData$YM2
+##### OUTPUT FILE -----
 
-
-(startRange = match(data$YM[1], predictorData$YM))
-(endRange   = match(predictorData$YM[predRows-1], data$YM))
-
-combinedData = cbind(data[1:endRange, ], predictorData[startRange:(predRows-1),])
-combinedData$YM2 = NULL
-combCols = ncol(combinedData)
-combinedData = combinedData[c(1, 12, 13, 14, 15, 16, c(2:11), c(17:combCols))]
-
+#Import predictors
+PredData = read.csv("PredictorData2016.csv", header =T, sep = ";")
+predCols = ncol(PredData)
+names(PredData)[1] = "YM"
+YM = PredData$YM
+PredData$Month = substr(PredData$YM, 5,6)
+PredData$Year = substr(PredData$YM, 1, 4)
 #Removing NaNs
-for(i in 1:combCols){
-  list = which(combinedData[,i] == "NaN")
-  combinedData[list,i] = 0
+for(i in 1:predCols){
+  list = which(PredData[,i] == "NaN")
+  PredData[list,i] = 0
   list = NULL
 }
 
-write.csv(combinedData, file = "combinedIndexData.csv")
+MatchList = match(PredData$YM, data$YM)
+startRow = which(MatchList %in% 1)
+PredDataOutput = PredData[startRow:nrow(PredData),2:predCols]
+PredDataOutput = PredDataOutput[1:nrow(PredDataOutput)-1,]
+outputRows = nrow(PredDataOutput)+1 #to account for the shift in index data
+
+#INDEX DATA FOR OUTPUT
+originalData = data[,2:11]
+dataCols = ncol(originalData)
+#Removing NaNs
+for(i in 1:dataCols){
+  list = which(originalData[,i] == "NaN")
+  originalData[list,i] = 0
+  list = NULL
+}
+
+#Shift data
+outputY = originalData[2:(outputRows), 9]
+outputX = originalData[1:(outputRows-1),]
+
+
+outputData = cbind(outputX, PredDataOutput, outputY)
+write.table(outputData, file = "monthlyUtilsReturn.csv", col.names = FALSE, row.names = F, sep = ",")
 
 ##### CORRELATIONS -----
 cor(combinedData[,7:combCols])

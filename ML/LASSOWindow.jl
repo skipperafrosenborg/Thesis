@@ -510,7 +510,7 @@ println("Leeeeroooy Jenkins")
 #Esben's path
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 path = "$(homedir())/Documents/GitHub/Thesis/Data"
-mainData = loadIndexDataNoDur(path)
+mainData = loadIndexDataOther(path)
 fileName = path*"/Results/IndexData/IndexData"
 mainDataArr = Array(mainData)
 
@@ -528,11 +528,12 @@ mainXarr = expandWithTime3612(mainXarr)
 # Transform #
 mainXarr = expandWithTransformations(mainXarr)
 
-#mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
+mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
 
 # Standardize
 standX = zScoreByColumn(mainXarr)
-standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
+standY = mainDataArr[:, nCols:nCols]
+#standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
 allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
@@ -573,7 +574,7 @@ function solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
 	oosErrors = Ypred - Xpred*bSolved
 	oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
 	oosSize = sum(Ypred[i]^2 for i=1:length(Ypred))
-	OOSRsquared = sqrt(oosErrorTotal) / sqrt(oosSize)
+	OOSRsquared = sqrt(oosErrorTotal) #/ sqrt(oosSize)
 
 	#Indicator Results
 	YpredValue = Ypred[1]
@@ -594,13 +595,13 @@ end
 
 
 nGammas = 5
-trainingSize = 12
+trainingSize = 48
 predictions = 1
 testRuns = nRows-trainingSize-predictions
 ISR = zeros(nGammas, testRuns)
 OOSR = zeros(nGammas, testRuns)
 Indi = zeros(nGammas, testRuns)
-gammaArray = logspace(0, 2, nGammas)
+gammaArray = logspace(0, 1, nGammas)
 
 for r = 1:(nRows-trainingSize-predictions)
 	Xtrain = allData[r:(trainingSize+r), 1:bCols]
@@ -628,14 +629,14 @@ end
 combinedArray = hcat(round.(gammaArray,3), ISR)
 runCounter = collect(0:testRuns)'
 ISRcomb = vcat(runCounter, combinedArray)
-writedlm("ISRsquared121TimeWithoutTA3.CSV", ISRcomb,",")
+writedlm("ISRsquared481TimeTAOtherNotStandY.CSV", ISRcomb,",")
 combinedArray = hcat(round.(gammaArray,3), OOSR)
 OOSRcomb = vcat(runCounter, combinedArray)
-writedlm("OOSRsquared121TimeWithoutTA3.CSV", OOSRcomb,",")
+writedlm("OOSRsquared481TimeTAOtherNotStandY.CSV", OOSRcomb,",")
 
 combinedArray = hcat(round.(gammaArray,3), Indi)
 Indicomb = vcat(runCounter, combinedArray)
-writedlm("Indicator121TimeWithoutTA3.CSV", Indicomb,",")
+writedlm("Indicator481TimeTAOtherNotStandY.CSV", Indicomb,",")
 
 
 """
