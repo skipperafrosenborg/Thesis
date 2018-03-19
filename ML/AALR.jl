@@ -9,13 +9,13 @@ include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
 #Esben's path
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
-path = "$(homedir())/Documents/GitHub/Thesis/Data"
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 #mainData = loadIndexDataNoDur(path)
 #fileName = path*"/Results/IndexData/IndexData"
 #mainData = loadConcrete(path)
@@ -26,8 +26,8 @@ fileName = path*"/Results/HousingData/HousingData"
 #fileName = path*"/Results/CPUData/CPUData"
 
 #Reset HPC path
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-#cd(path)
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+cd(path)
 
 mainDataArr = Array(mainData)
 halfRows = Int64(floor(size(mainDataArr)[1]/2))
@@ -87,6 +87,8 @@ status = solve(m);
 #Get objective value
 println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
+
+kmax = 60
 
 #Get solution value
 #zSolved = getvalue(z)
@@ -629,7 +631,7 @@ function solveAndLogForAllK(model, kmax)
 				solArr[Int64((i-1)*length(gammaArray)+j),2] = j
 				solArr[Int64((i-1)*length(gammaArray)+j),3] = Rsquared
 				push!(kValue, (i-1)*length(gammaArray)+j)
-				push!(RsquaredValue, Rsquared
+				push!(RsquaredValue, Rsquared)
 				println("Rsquared =$Rsquared\t kMax =$i \t gamma =$j")
 				write(f, "$Rsquared,$gamma,$i,$bSolved\n")
 			end
