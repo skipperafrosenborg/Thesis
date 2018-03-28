@@ -510,7 +510,7 @@ println("Leeeeroooy Jenkins")
 #Esben's path
 cd("$(homedir())/Documents/GitHub/Thesis/Data")
 path = "$(homedir())/Documents/GitHub/Thesis/Data"
-mainData = loadIndexDataOther(path)
+mainData = loadIndexDataNoDur(path)
 fileName = path*"/Results/IndexData/IndexData"
 mainDataArr = Array(mainData)
 
@@ -588,29 +588,37 @@ function solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
 		Indicator = 0
 	end
 
+	if YestimateValue >= 0
+		Indicator2 = 1
+	elseif YestimateValue < 0
+		Indicator2 = 0
+	else
+		Indicator2 = 0
+	end
 
-	return ISRsquared, OOSRsquared, Indicator
+	return ISRsquared, OOSRsquared, Indicator, Indicator2
 end
 
 
 
-nGammas = 5
-trainingSize = 48
+nGammas = 2
+trainingSize = 12
 predictions = 1
 testRuns = nRows-trainingSize-predictions
 ISR = zeros(nGammas, testRuns)
 OOSR = zeros(nGammas, testRuns)
 Indi = zeros(nGammas, testRuns)
+Indi2 = zeros(nGammas, testRuns)
 gammaArray = logspace(0, 1, nGammas)
 
 for r = 1:(nRows-trainingSize-predictions)
-	Xtrain = allData[r:(trainingSize+r), 1:bCols]
-	Ytrain = allData[r:(trainingSize+r), bCols+1]
-	Xpred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
-	Ypred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
+	Xtrain = allData[r:(trainingSize+(r-1)), 1:bCols]
+	Ytrain = allData[r:(trainingSize+(r-1)), bCols+1]
+	Xpred  = allData[(trainingSize+(r-1)+1):(trainingSize+(r-1)+predictions), 1:bCols]
+	Ypred  = allData[(trainingSize+(r-1)+1):(trainingSize+(r-1)+predictions), bCols+1]
 	for g = 1:nGammas
 		gamma = gammaArray[g]
-		ISR[g, r], OOSR[g, r], Indi[g, r] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+		ISR[g, r], OOSR[g, r], Indi[g, r], Indi2[g, r] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
 	end
 end
 
@@ -629,15 +637,19 @@ end
 combinedArray = hcat(round.(gammaArray,3), ISR)
 runCounter = collect(0:testRuns)'
 ISRcomb = vcat(runCounter, combinedArray)
-writedlm("ISRsquared481TimeTAOtherNotStandY.CSV", ISRcomb,",")
+writedlm("ISRTestNoDur121IndiPortfolio.CSV", ISRcomb,",")
 combinedArray = hcat(round.(gammaArray,3), OOSR)
 OOSRcomb = vcat(runCounter, combinedArray)
-writedlm("OOSRsquared481TimeTAOtherNotStandY.CSV", OOSRcomb,",")
+writedlm("OOSRTestNoDur121Portfolio.CSV", OOSRcomb,",")
 
 combinedArray = hcat(round.(gammaArray,3), Indi)
 Indicomb = vcat(runCounter, combinedArray)
-writedlm("Indicator481TimeTAOtherNotStandY.CSV", Indicomb,",")
+writedlm("IndicatorTestNoDur121IndiPortfolio.CSV", Indicomb,",")
 
+
+combinedArray = hcat(round.(gammaArray,3), Indi2)
+Indicomb = vcat(runCounter, combinedArray)
+writedlm("Indicator2TestNoDur121IndiPortfolio.CSV", Indicomb,",")
 
 """
 LASSO with daily returns
