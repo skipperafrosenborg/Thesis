@@ -167,7 +167,8 @@ mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
 
 # Standardize
 standX = zScoreByColumn(mainXarr)
-standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
+standY = mainDataArr[:, nCols:nCols]
+#standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
 allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
@@ -208,7 +209,7 @@ function solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
 	oosErrors = Ypred - Xpred*bSolved
 	oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
 	oosSize = sum(Ypred[i]^2 for i=1:length(Ypred))
-	OOSRsquared = sqrt(oosErrorTotal) / sqrt(oosSize)
+	OOSRsquared = sqrt(oosErrorTotal) #/ sqrt(oosSize)
 
 	#Indicator Results
 	YpredValue = Ypred[1]
@@ -238,6 +239,7 @@ end
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> parent of be6f44e... Merge branch 'master' of https://github.com/skipperafrosenborg/Thesis
 nGammas = 10
@@ -253,6 +255,8 @@ gammaArray = logspace(0, 3, nGammas)
 nGammas = 5
 trainingSize = 48
 =======
+=======
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
 nGammas = 2
 trainingSize = 12
 >>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
@@ -263,9 +267,12 @@ OOSR = zeros(nGammas, testRuns)
 Indi = zeros(nGammas, testRuns)
 Indi2 = zeros(nGammas, testRuns)
 gammaArray = logspace(0, 1, nGammas)
+<<<<<<< HEAD
 >>>>>>> 4fe6210679f2fdd18244c00e7397df164bf0740d
 =======
 >>>>>>> parent of be6f44e... Merge branch 'master' of https://github.com/skipperafrosenborg/Thesis
+=======
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
 
 for r = 1:(nRows-trainingSize-predictions)
 	Xtrain = allData[r:(trainingSize+(r-1)), 1:bCols]
@@ -275,7 +282,11 @@ for r = 1:(nRows-trainingSize-predictions)
 	for g = 1:nGammas
 		gamma = gammaArray[g]
 <<<<<<< HEAD
+<<<<<<< HEAD
 		ISR[r, g], OOSR[r, g], Indi[r, g] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+=======
+		ISR[g, r], OOSR[g, r], Indi[g, r], Indi2[g, r] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
 =======
 		ISR[g, r], OOSR[g, r], Indi[g, r], Indi2[g, r] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
 >>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
@@ -321,6 +332,7 @@ writedlm("OOSRTestNoDur121Portfolio.CSV", OOSRcomb,",")
 combinedArray = hcat(round.(gammaArray,3), Indi)
 Indicomb = vcat(runCounter, combinedArray)
 <<<<<<< HEAD
+<<<<<<< HEAD
 writedlm("Indicator481TimeTAOtherNotStandY.CSV", Indicomb,",")
 >>>>>>> 4fe6210679f2fdd18244c00e7397df164bf0740d
 =======
@@ -330,6 +342,11 @@ writedlm("IndicatorTestNoDur121IndiPortfolio.CSV", Indicomb,",")
 =======
 >>>>>>> parent of be6f44e... Merge branch 'master' of https://github.com/skipperafrosenborg/Thesis
 
+=======
+writedlm("IndicatorTestNoDur121IndiPortfolio.CSV", Indicomb,",")
+
+
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
 combinedArray = hcat(round.(gammaArray,3), Indi2)
 Indicomb = vcat(runCounter, combinedArray)
 writedlm("Indicator2TestNoDur121IndiPortfolio.CSV", Indicomb,",")

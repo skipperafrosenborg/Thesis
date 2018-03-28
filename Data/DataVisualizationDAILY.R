@@ -8,9 +8,9 @@ library(date)
 library(zoo)
 library(marima)
 library(vars)
-library(LSTS)
 
-setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data")
+
+setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data/DailyReturns")
 data = read.csv("Daily - Average Equal Weighted Returns.csv", header =T)
 data$Average = rowMeans(data[,2:11], na.rm = TRUE)
 data$CumSumAverage = cumsum(data$Average)
@@ -96,6 +96,28 @@ for(i in (split+1):(initCols-1)){
 
 
 ##### OUTPUT FILE -----
+
+#Import predictors
+PredData = read.csv("PredictorData2016.csv", header =T, sep = ";")
+predCols = ncol(PredData)
+names(PredData)[1] = "YM"
+YM = PredData$YM
+PredData$Month = substr(PredData$YM, 5,6)
+PredData$Year = substr(PredData$YM, 1, 4)
+#Removing NaNs
+for(i in 1:predCols){
+  list = which(PredData[,i] == "NaN")
+  PredData[list,i] = 0
+  list = NULL
+}
+
+MatchList = match(PredData$YM, data$YM)
+startRow = which(MatchList %in% 1)
+PredDataOutput = PredData[startRow:nrow(PredData),2:predCols]
+PredDataOutput = PredDataOutput[1:nrow(PredDataOutput)-1,]
+outputRows = nrow(PredDataOutput)+1 #to account for the shift in index data
+
+#INDEX DATA FOR OUTPUT
 originalData = data[,2:11]
 dataCols = ncol(originalData)
 #Removing NaNs
@@ -106,11 +128,12 @@ for(i in 1:dataCols){
 }
 
 #Shift data
-dataRows = nrow(originalData)
-outputY = originalData[1:(dataRows-1), 10]
-outputX = originalData[2:dataRows,]
-outputData = cbind(outputX, outputY)
-write.table(outputData, file = "dailyOtherReturn.csv", col.names = FALSE, row.names = F, sep = ",")
+outputY = originalData[2:(outputRows), 10]
+outputX = originalData[1:(outputRows-1),]
+
+
+outputData = cbind(outputX, PredDataOutput, outputY)
+write.table(outputData, file = "monthlyOtherReturn.csv", col.names = FALSE, row.names = F, sep = ",")
 
 ##### CORRELATIONS -----
 cor(combinedData[,7:combCols])

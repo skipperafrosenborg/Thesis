@@ -385,7 +385,7 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 end
 
 
-"""t
+"""
 Function that returns all the column names including ^2, log(), sqrt()
 """
 function expandedColNamesToString(colNames)

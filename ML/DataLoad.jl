@@ -20,16 +20,30 @@ function loadIndexDataNoDur(path)
     return mainData
 end
 
+<<<<<<< HEAD
 function loadIndexDataNoDurVIX(path)
     cd(path)
     mainData = CSV.read("monthlyNoDurReturnVIX.csv", header=["NoDur","Durbl",
         "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
         "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
         "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","VIX","Ycol"],
+=======
+function loadIndexDataOther(path)
+    cd(path)
+    mainData = CSV.read("monthlyOtherReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
+        "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
+        "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","Ycol"],
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
         delim = ',', nullable=false, types=Dict(25=>Float64))
     return mainData
 end
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> bee04ad7b02cee3642894bc88ca8f415908cae9a
 function loadIndexDataDailyNoDur(path)
     cd(path)
     mainData = CSV.read("dailyNoDurReturn.csv", header=["NoDur","Durbl",
