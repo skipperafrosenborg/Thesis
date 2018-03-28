@@ -364,7 +364,7 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 
 	expandedX = hcat(expandedX, Mom9arr)
 
-	# computing for m=9
+	# computing for m=12
 	Mom12arr = []
 	for j=1:(xRows-12)
 		if Y[j] > Y[j+12]

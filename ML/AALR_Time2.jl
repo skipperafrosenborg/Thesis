@@ -4,6 +4,7 @@ using StatsBase
 using DataFrames
 using CSV
 using Bootstrap #External packages, must be added
+using JLD
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
@@ -13,21 +14,15 @@ println("Leeeeroooy Jenkins")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 mainData = loadIndexDataNoDur(path)
 fileName = path*"/Results/IndexData/IndexData"
-#mainData = loadConcrete(path)
-#fileName = path*"/Results/Concrete/Concrete"
-#mainData = loadHousingData(path)
-#fileName = path*"/Results/HousingData/HousingData"
-#mainData = loadCPUData(path)
-#fileName = path*"/Results/CPUData/CPUData"
 
 #Reset HPC path
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-#cd(path)
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+cd(path)
 
 mainDataArr = Array(mainData)
 
@@ -44,8 +39,7 @@ mainXarr = expandWithTime3612(mainXarr)
 
 # Transform #
 mainXarr = expandWithTransformations(mainXarr)
-
-#mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
+mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
 
 # Standardize
 standX = zScoreByColumn(mainXarr)
@@ -58,10 +52,6 @@ nGammas = 5
 trainingSize = 12
 predictions = 1
 testRuns = nRows-trainingSize-predictions
-ISR = zeros(nGammas, testRuns)
-OOSR = zeros(nGammas, testRuns)
-Indi = zeros(nGammas, testRuns)
-gammaArray = logspace(0, 2, nGammas)
 
 Xtrain = allData[:, 1:bCols]
 trainingData = Xtrain[:,1:nCols-1]
@@ -92,9 +82,6 @@ for i=1:length(z)
     end
 end
 
-#Print model
-#print(m)
-
 #Get solution status
 status = solve(m);
 
@@ -102,223 +89,122 @@ status = solve(m);
 println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
 
-#Get solution value
-#zSolved = getvalue(z)
 println("STAGE 1 DONE")
 
 amountOfGammas = 5
 solArr = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
 realArr = zeros((nRows-trainingSize-predictions), 1)
-
-
-#=
-mainData, testData = loadElevatorData(path)
-dataSize = size(mainData)
-colNames = names(mainData)
-trainingData = Array(mainData)
-testData = Array(testData)
-nRows = size(trainingData)[1]
-nCols = size(trainingData)[2]
-=#
+ISRSquared = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
+bSolMatrix = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas, bCols)
 
 ### STAGE 2 ###
 println("STAGE 2 INITIATED")
 
-#=
-# Output for Lasso regression in R
-writedlm(fileName*"XTrain.CSV",standX,",")
-writedlm(fileName*"YTrain.CSV",standY,",")
-writedlm(fileName*"XTest.CSV",standXTest,",")
-writedlm(fileName*"YTest.CSV",standYTest,",")
-writedlm(fileName*"XVali.CSV",standXVali,",")
-writedlm(fileName*"YVali.CSV",standYVali,",")
-=#
-
 #Initialise values for check later
-kValue = []
-RsquaredValue = []
 bSolved = []
 bestBeta = []
-warmStartBeta = []
-warmstartZ = []
-
-startIter = 1
 
 bigM = 100
-tau = 2
-
-stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30))
-SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
-gammaArray = log10.(logspace(0, log10.(SSTO), amountOfGammas))
-
-bbdata = NodeData[]
-
-function buildStage2(standX, standY, kmax)
-	HC = cor(mainXarr)
-	HCPairCounter = 0
-	#println("Building model")
-	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 1));
-	gamma = 10
-
-	#Define variables
-	@variable(stage2Model, b[1:bCols]) #Beta values
-
-	#Define binary variable (5b)
-	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
-
-	@variable(stage2Model, v[1:bCols]) # auxiliary variables for abs
-
-	@variable(stage2Model, T) #First objective term
-	@variable(stage2Model, G) #Second objective term
-
-	#Define objective function (5a)
-	@objective(stage2Model, Min, T+G)
-
-	#println("Trying to implement new constraint")
-	xSquareExpr = @expression(stage2Model, 0*b[1]^2)
-	for l = 1:bCols
-		coef = 0
-		for j = 1:nRows
-		   coef += standX[j,l]^(2)
-		end
-		append!(xSquareExpr, @expression(stage2Model, coef*b[l]^2))
-	end
-	#println("Implemented x^2")
-
-	ySquaredExpr = @expression(stage2Model, 0*b[1])
-	for j = 1:nRows
-		append!(ySquaredExpr,@expression(stage2Model, standY[j,1]^2))
-	end
-	#println("Implemented y^2")
-
-	simpleBetaExpr = @expression(stage2Model, 0*b[1])
-	for l = 1:bCols
-		coef = 0
-		for j = 1:nRows
-			coef += -1*2*standX[j, l]*standY[j]
-		end
-		append!(simpleBetaExpr, @expression(stage2Model, coef*b[l]))
-	end
-	#println("Implemented simpleBetaExpr")
-
-	crossBetaExpr = @expression(stage2Model, 0*b[1]*b[2])
-	iter = 1
-	for l = 1:bCols
-		for k = (l + 1):bCols
-			coef = 0
-			for j = 1:nRows
-				coef += 2*standX[j,l]*standX[j,k]
-			end
-			append!(crossBetaExpr, @expression(stage2Model, coef*b[l,1]*b[k,1]))
-		end
-		#println("Finished loop $l/$bCols")
-	end
-	#println("Implemented crossBetaExpr")
-	totalExpr = @expression(stage2Model, crossBetaExpr+simpleBetaExpr+xSquareExpr+ySquaredExpr)
-	@constraint(stage2Model, quadConst, totalExpr <= T)
-	#println("Successfully added quadratic constraints")
-
-	#Define constraints (5c)
-	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z) #from 0 to bCols -1
-	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z) #from bCols to 2bCols-1
-
-	#Second objective term
-	@constraint(stage2Model, 1*b .<= v) #from 2bCols to 3bCols-1
-	@constraint(stage2Model, -1*b .<= v) #from 3bCols to 4bCols-1
-	oneNorm = sum(v[i] for i=1:bCols)
-
-	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
-	g=5
-	@constraint(stage2Model, gammaConstr, 1*oneNorm <= G) #4bCols
-
-	#Define kmax constraint (5d)
-	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= kmax) #4bCols+1
-
-	#Constraint 5f - can only select one of a pair of highly correlated features
-	rho = 0.8
-	for k=1:bCols
-		for j=1:bCols
-			if k != j
-				if HC[k,j] >= rho
-					HCPairCounter += 1
-					@constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
-				end
-			end
-		end
-	end
-
-
-	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-	for j=1:(nCols-1)
-		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1) #from (4bCols+1+HCPairCounter) to (4bCols+1+HCPairCounter+nCols)
-	end
-
-	#Adding empty cuts to possibly contain cuts. Can generate a maximum of 6 cuts for
-	#each stage 3 and default value is 3 iterations between stage 2 and stage 3,
-	#so 18 empty constraints are added + 1 for fixing the solution
-	nEmptyCuts = 19
-	zOnes = ones(bCols)
-	for c = 1:nEmptyCuts
-		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
-	end
-
-	#addinfocallback(stage2Model, infocallback, when = :Intermediate)
-
-	JuMP.build(stage2Model)
-
-	return internalmodel(stage2Model), HCPairCounter
-end
-
-stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
+gammaArray = log10.(logspace(0.001, log10.(SSTO), amountOfGammas))
 
 # best3Beta[:,1] = Rsquared
 # best3Beta[:,2] = kmax
 # best3Beta[:,3] = gamma
 # best3Beta[:,4:bCols+3] = beta
-
-function solveAndLogForAllK(model, kmax, standXVali, standYVali, r)
-	best3Beta = zeros(3,bCols+3)
+function solveAndLogForAllK(kmax, standXVali, standYVali, r)
+    best3Beta = zeros(3,bCols+3)
 	println("Solving for all k and gamma")
-	#open(fileName*"AALRLog.csv", "w") do f
-		allColNames = expandedColNamesToString(colNames)
-		#write(f, "RsquaredValue,gamma,k, $allColNames\n")
+		#allColNames = expandedColNamesToString(colNames)
+        SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 		for i in 1:1:kmax
+			for g in 1:length(gammaArray)
+                HC = cor(standX)
 
-        	#Set kMax rhs constraint
-			curUB = Gurobi.getconstrUB(model) #Get current UBbounds
-			curUB[bCols*4+2] = i #Change upperbound in current bound vector
-			Gurobi.setconstrUB!(model, curUB) #Push bound vector to model
-			Gurobi.updatemodel!(model)
+				gamma = gammaArray[g]
 
-			#Set new Big M
-			newBigM = 3#tau*norm(warmStartBeta, Inf)
-			changeBigM(model,newBigM)
-			for j in 1:length(gammaArray)
-				gamma=gammaArray[j]
-				changeGamma(model, gammaArray[j])
+            	HCPairCounter = 0
+            	#println("Building model")
+            	#Define parameters and model
+            	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 0));
 
-				#println("Starting to solve stage 2 model with kMax = $i and gamma = $j")
+            	#Define variables
+            	@variable(stage2Model, b[1:bCols]) #Beta values
 
-				Gurobi.writeproblem(model, "testproblem.lp")
+            	#Define binary variable (5b)
+            	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin )
+
+            	@variable(stage2Model, v[1:bCols]) # auxiliary variables for abs
+
+            	@variable(stage2Model, T) #First objective term
+            	@variable(stage2Model, G) #Second objective term
+
+            	#Define objective function (5a)
+            	@objective(stage2Model, Min, T+G)
+
+                @constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
+
+            	#Define constraints (5c)
+            	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z) #from 0 to bCols -1
+            	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z) #from bCols to 2bCols-1
+
+            	#Second objective term
+            	@constraint(stage2Model, 1*b .<= v) #from 2bCols to 3bCols-1
+            	@constraint(stage2Model, -1*b .<= v) #from 3bCols to 4bCols-1
+
+
+            	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
+                @constraint(stage2Model, gammaConstr, gamma*ones(bCols)'*v <= G) #4bCols
+
+                #oneNorm = sum(v[i] for i=1:bCols)
+                #@constraint(stage2Model, gammaConstr, gamma*oneNorm <= G) #4bCols
+
+            	#Define kmax constraint (5d)
+            	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= i) #4bCols+1
+
+            	#Constraint 5f - can only select one of a pair of highly correlated features
+            	rho = 0.8
+            	for k=1:bCols
+            		for j=1:bCols
+            			if k != j
+            				if HC[k,j] >= rho
+            					HCPairCounter += 1
+            					@constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
+            				end
+            			end
+            		end
+            	end
+
+
+            	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+            	for j=1:(nCols-1)
+            		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1) #from (4bCols+1+HCPairCounter) to (4bCols+1+HCPairCounter+nCols)
+            	end
+
+            	#Adding empty cuts to possibly contain cuts. Can generate a maximum of 6 cuts for
+            	#each stage 3 and default value is 3 iterations between stage 2 and stage 3,
+            	#so 18 empty constraints are added + 1 for fixing the solution
+            	nEmptyCuts = 19
+            	zOnes = ones(bCols)
+            	for c = 1:nEmptyCuts
+            		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
+            	end
 
 				#Solve Stage 2 model
-				status = Gurobi.optimize!(model)
-				#println("Objective value: ", Gurobi.getobjval(model))
+                solve(stage2Model)
+                bSolved = getvalue(b)
+                bSolMatrix[r,Int64((i-1)*amountOfGammas+g),:] = bSolved
 
-				sol = Gurobi.getsolution(model)
-
-				#printSolutionToCSV("lars.csv", bbdata)
+                SSres = sum((standY[i]-(standX[i,:]'*bSolved))^2 for i=1:length(standY))
+                ISRSquared[r,Int64((i-1)*amountOfGammas+g)] = 1 - SSres/SSTO
 				#Get solution and calculate R^2
-				bSolved = sol[1:bCols]
-				zSolved = sol[1+bCols:2*bCols]
+				#bSolved = sol[1:bCols]
+				#zSolved = sol[1+bCols:2*bCols]
 
                 prediction = standXVali*bSolved
 
-				println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$j")
-                solArr[r,Int64((i-1)*amountOfGammas+j)] = prediction[1]
+				println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g")
+                solArr[r,Int64((i-1)*amountOfGammas+g)] = prediction[1]
                 realArr[r,1] = standYVali[1]
 			end
 			#printNonZeroValues(bSolved)
@@ -428,24 +314,37 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     bSample = []
     allCuts = []
     signifBoolean = zeros(3)
-    stage2Model, HCPairCounter = @time(buildStage2(standX,standY, kmax))
+    #stage2Model, HCPairCounter = @time(buildStage2(standX,standY, kmax))
 
     #Gurobi.writeproblem(stage2Model, "testproblem1.lp")
 
-    @time(solveAndLogForAllK(stage2Model, kmax, standXVali, standYVali, r))
+    @time(solveAndLogForAllK(kmax, standXVali, standYVali, r))
 end
-
 
 
 for r = 1:(nRows-trainingSize-predictions)
-	Xtrain = allData[r:(trainingSize+r), 1:bCols]
+	standX = allData[r:(trainingSize+r), 1:bCols]
     nRows = size(Xtrain)[1]
     trainingData = Xtrain[:,1:nCols-1]
-	Ytrain = allData[r:(trainingSize+r), bCols+1]
+	standY = allData[r:(trainingSize+r), bCols+1]
 	standXVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
 	standYVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
-	AALR_Time_Run(Xtrain, Ytrain, standXVali, standYVali, trainingData, r)
+	AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
+
+    for i=1:100
+        if r == floor((nRows-trainingSize-predictions)/100*i)
+            writedlm(fileName*"_solution.CSV",solArr,",")
+            writedlm(fileName*"_realArray.CSV",realArr,",")
+            writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
+            save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
+        end
+    end
 end
+
+writedlm(fileName*"_solution.CSV",solArr,",")
+writedlm(fileName*"_realArray.CSV",realArr,",")
+writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
+save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
 
 #=
 cuts = stageThree(best3Beta, standX, standY, allCuts)

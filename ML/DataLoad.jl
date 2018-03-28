@@ -12,10 +12,20 @@ end
 
 function loadIndexDataNoDur(path)
     cd(path)
-    mainData = CSV.read("combinedIndexDataNoDur2.csv", header=["NoDur","Durbl",
+    mainData = CSV.read("monthlyNoDurReturn.csv", header=["NoDur","Durbl",
         "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
         "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
         "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","Ycol"],
+        delim = ',', nullable=false, types=Dict(25=>Float64))
+    return mainData
+end
+
+function loadIndexDataNoDurVIX(path)
+    cd(path)
+    mainData = CSV.read("monthlyNoDurReturnVIX.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
+        "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
+        "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","VIX","Ycol"],
         delim = ',', nullable=false, types=Dict(25=>Float64))
     return mainData
 end

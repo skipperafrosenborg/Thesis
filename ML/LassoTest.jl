@@ -1,0 +1,363 @@
+#LASSO
+using JuMP
+using Gurobi
+using StatsBase
+using DataFrames
+using CSV
+using Bootstrap #External packages, must be added
+include("SupportFunction.jl")
+include("DataLoad.jl")
+println("Leeeeroooy Jenkins")
+
+#Esben's path
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#path = "$(homedir())/Documents/GitHub/Thesis/Data"
+
+# loopArr row = iteration
+# boolean column: raw, time, exp, ta
+#loopArr = zeros(1,4)
+
+function runLassos(raw, time, exp, TA)
+	#Skipper's path
+	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+	#mainData = loadIndexDataNoDur(path)
+	mainData = loadIndexDataNoDurVIX(path)
+	mainDataArr = Array(mainData)
+
+	colNames = names(mainData)
+
+	nRows = size(mainDataArr)[1]
+	nCols = size(mainDataArr)[2]
+
+	fileName = path*"/Results/IndexData/LassoTests/240-1/2401_Shrink_"
+	#Reset HPC path
+	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+	#cd(path)
+
+	mainXarr = mainDataArr[:,1:nCols-1]
+	if raw == 1
+		fileName = fileName*"Raw"
+		mainXarr = mainXarr[:,1:10]
+	else
+		fileName = fileName*"Macro"
+	end
+
+	mainYarr = mainDataArr[:, nCols:nCols]
+
+	# Transform with time elements
+	if time == 1
+		fileName = fileName*"Time"
+		mainXarr = expandWithTime3612(mainXarr)
+	end
+
+	# Transform #
+	if exp == 1
+		fileName = fileName*"Exp"
+		mainXarr = expandWithTransformations(mainXarr)
+	end
+
+	if TA == 1
+		fileName = fileName*"TA"
+		mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
+	end
+
+	# Standardize
+	standX = zScoreByColumn(mainXarr)
+	standY =mainDataArr[:, nCols:nCols]
+	allData = hcat(standX, standY)
+	bCols = size(standX)[2]
+	nRows = size(standX)[1]
+	println(" \n \n \nSolving Convex \n \n \n")
+
+	fileName = fileName*"_"
+
+	println(fileName)
+
+	function solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+		bCols = size(Xtrain)[2]
+		M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+		@variables M begin
+		        b[1:bCols]
+		        t[1:bCols]
+		        w
+		end
+		@objective(M,Min,0.5*w+gamma*ones(bCols)'*t)
+		@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w)
+		@constraint(M,  b .<= t)
+		@constraint(M, -t .<= b)
+
+		solve(M)
+		bSolved = getvalue(b)
+
+		for i in 1:length(bSolved)
+			if bSolved[i] <= 1e-6
+				if bSolved[i] >= -1e-6
+					bSolved[i] = 0
+				end
+			end
+		end
+
+		k = countnz(bSolved)
+
+		#In-Sample R-squared value
+		errors = (Ytrain-Xtrain*bSolved)
+		errorTotal = sum(errors[i]^2 for i=1:length(errors))
+		errorsMean = Ytrain-mean(Ytrain)
+		errorMeanTotal = sum(errorsMean[i]^2 for i=1:length(errorsMean))
+		ISRsquared = 1-(errorTotal/errorMeanTotal)
+		#=
+		#OOS R-squared value (for more predictions)
+		oosErrors = Ypred - Xpred*bSolved
+		oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
+		oosErrorsMean = Ypred - mean(Ypred)
+		oosErrorsMeanTotal = sum(oosErrorsMean[i]^2 for i=1:length(oosErrorsMean))
+		OOSRsquared = 1-(oosErrorTotal/oosErrorsMeanTotal)
+
+
+		#OOS R-squared value (for single prediction)
+		oosErrors = Ypred - Xpred*bSolved
+		oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
+		oosSize = sum(Ypred[i]^2 for i=1:length(Ypred))
+		OOSRsquared = sqrt(oosErrorTotal) / sqrt(oosSize)
+		=#
+
+		#Indicator Results
+		YpredValue = Ypred[1]
+		Yestimate = Xpred*bSolved
+		YestimateValue = Yestimate[1]
+		if YpredValue >= 0 && YestimateValue >= 0
+			Indicator = 1
+		elseif YpredValue < 0 && YestimateValue < 0
+			Indicator = 1
+		else
+			Indicator = 0
+		end
+
+
+		return ISRsquared, Indicator, YestimateValue#, bSolved
+	end
+
+	nGammas = 10
+	trainingSize = 240
+	predictions = 1
+	testRuns = nRows-trainingSize-predictions
+	ISR = zeros(testRuns, nGammas)
+	OOSR = zeros(testRuns, nGammas)
+	Indi = zeros(testRuns, nGammas)
+	gammaArray = logspace(0, 3, nGammas)
+	predictedArr = zeros(testRuns, nGammas)
+	realArr = zeros(testRuns, 1)
+	bSolvedArr = zeros(testRuns, bCols)
+
+	for r = 1:(nRows-trainingSize-predictions)
+		Xtrain = allData[r:(trainingSize+r), 1:bCols]
+		Ytrain = allData[r:(trainingSize+r), bCols+1]
+		Xpred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
+		Ypred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
+		realArr[r] = Ypred[1]
+
+		#g=5
+		for g = 1:nGammas
+			gamma = gammaArray[g]
+			#ISR[r, g], Indi[r, g], predictedArr[r, g], bSolvedArr[r,:] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+			ISR[r, g], Indi[r, g], predictedArr[r, g] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+		end
+
+		if (r%100 == 0)
+			println("Row $r/",(nRows-trainingSize-predictions))
+		end
+	end
+
+	#=
+	for r = 1:testRuns
+		Xtrain = allData[(1+(r-1)*trainingSize):(trainingSize+(r-1)*trainingSize), 1:bCols]
+		Ytrain = allData[(1+(r-1)*trainingSize):(trainingSize+(r-1)*trainingSize), bCols+1]
+		Xpred  = allData[(trainingSize+(r-1)*trainingSize):(trainingSize+(r-1)*trainingSize+(predictions-1)), 1:bCols]
+		Ypred  = allData[(trainingSize+(r-1)*trainingSize):(trainingSize+(r-1)*trainingSize+(predictions-1)), bCols+1]
+		for g = 1:nGammas
+			gamma = gammaArray[g]
+			ISR[g, r], OOSR[g, r] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+		end
+	end
+	=#
+
+	combinedArray = vcat((round.(gammaArray,3))', ISR)
+
+	runCounter = collect(0:testRuns)
+	ISRcomb = hcat(runCounter, combinedArray)
+	writedlm(fileName*"ISRsquared.CSV", ISRcomb,",")
+
+	combinedArray = vcat((round.(gammaArray,3))', Indi)
+	Indicomb = hcat(runCounter, combinedArray)
+	writedlm(fileName*"Indi.CSV", Indicomb,",")
+
+	combinedArray = vcat((round.(gammaArray,3))', Indi)
+	Indicomb = hcat(runCounter, combinedArray)
+	writedlm(fileName*"real.CSV", realArr,",")
+
+	combinedArray = vcat((round.(gammaArray,3))', Indi)
+	Indicomb = hcat(runCounter, combinedArray)
+	writedlm(fileName*"predicted.CSV", predictedArr,",")
+
+	writedlm(fileName*"bSolved.CSV", bSolvedArr,",")
+
+
+	println("Finished")
+end
+
+for raw = 0:1
+	for time = 0:1
+		for exp = 0:1
+			for TA = 0:1
+				runLassos(raw, time, exp, TA)
+			end
+		end
+	end
+end
+
+#=
+#Skipper's path
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+#mainData = loadIndexDataNoDur(path)
+mainData = loadIndexDataNoDurVIX(path)
+mainDataArr = Array(mainData)
+
+colNames = names(mainData)
+
+nRows = size(mainDataArr)[1]
+nCols = size(mainDataArr)[2]
+
+mainXarr = mainDataArr[:,1:nCols-1]
+#mainXarr = mainXarr[:,1:10]
+
+mainYarr = mainDataArr[:, nCols:nCols]
+
+fileName = path*"/Results/IndexData/LassoTests/12-1 VIX/121_Shrink_MacroTime_"
+println(fileName)
+#Reset HPC path
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+#cd(path)
+
+# Transform with time elements
+mainXarr = expandWithTime3612(mainXarr)
+
+# Transform #
+#mainXarr = expandWithTransformations(mainXarr)
+
+#mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
+
+# Standardize
+standX = zScoreByColumn(mainXarr)
+standY =mainDataArr[:, nCols:nCols]
+allData = hcat(standX, standY)
+bCols = size(standX)[2]
+nRows = size(standX)[1]
+println(" \n \n \nSolving Convex \n \n \n")
+
+function solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	bCols = size(Xtrain)[2]
+	M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+	@variables M begin
+	        b[1:bCols]
+	        t[1:bCols]
+	        w
+	end
+	@objective(M,Min,0.5*w+gamma*ones(bCols)'*t)
+	@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w)
+	@constraint(M,  b .<= t)
+	@constraint(M, -t .<= b)
+
+	solve(M)
+	bSolved = getvalue(b)
+
+	for i in 1:length(bSolved)
+		if bSolved[i] <= 1e-6
+			if bSolved[i] >= -1e-6
+				bSolved[i] = 0
+			end
+		end
+	end
+
+	k = countnz(bSolved)
+
+	#In-Sample R-squared value
+	errors = (Ytrain-Xtrain*bSolved)
+	errorTotal = sum(errors[i]^2 for i=1:length(errors))
+	errorsMean = Ytrain-mean(Ytrain)
+	errorMeanTotal = sum(errorsMean[i]^2 for i=1:length(errorsMean))
+	ISRsquared = 1-(errorTotal/errorMeanTotal)
+
+	#Indicator Results
+	YpredValue = Ypred[1]
+	Yestimate = Xpred*bSolved
+	YestimateValue = Yestimate[1]
+	if YpredValue >= 0 && YestimateValue >= 0
+		Indicator = 1
+	elseif YpredValue < 0 && YestimateValue < 0
+		Indicator = 1
+	else
+		Indicator = 0
+	end
+
+
+	return ISRsquared, Indicator, YestimateValue#, bSolved
+end
+
+nGammas = 10
+trainingSize = 12
+predictions = 1
+testRuns = nRows-trainingSize-predictions
+ISR = zeros(testRuns, nGammas)
+OOSR = zeros(testRuns, nGammas)
+Indi = zeros(testRuns, nGammas)
+gammaArray = logspace(0, 3, nGammas)
+predictedArr = zeros(testRuns, nGammas)
+realArr = zeros(testRuns, 1)
+#bSolvedArr = zeros(testRuns, bCols)
+
+for r = 1:(nRows-trainingSize-predictions)
+	Xtrain = allData[r:(trainingSize+r), 1:bCols]
+	Ytrain = allData[r:(trainingSize+r), bCols+1]
+	Xpred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
+	Ypred  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
+	realArr[r] = Ypred[1]
+
+	#ISR[r, g], OOSR[r, g], Indi[r, g], predictedArr[r, g] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	#ISR[r, g], Indi[r, g], predictedArr[r, g], bSolvedArr[r,:] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	#g=2
+	for g = 1:nGammas
+		gamma = gammaArray[g]
+		#ISR[r, g], OOSR[r, g], Indi[r, g], predictedArr[r, g] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+		ISR[r, g], Indi[r, g], predictedArr[r, g] = solveLasso(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	end
+
+	if (r%100 == 0)
+		println("Row $r/",(nRows-trainingSize-predictions))
+	end
+end
+
+combinedArray = vcat((round.(gammaArray,3))', ISR)
+
+runCounter = collect(0:testRuns)
+ISRcomb = hcat(runCounter, combinedArray)
+writedlm(fileName*"ISRsquared.CSV", ISRcomb,",")
+
+combinedArray = vcat((round.(gammaArray,3))', Indi)
+Indicomb = hcat(runCounter, combinedArray)
+writedlm(fileName*"Indi.CSV", Indicomb,",")
+
+combinedArray = vcat((round.(gammaArray,3))', Indi)
+Indicomb = hcat(runCounter, combinedArray)
+writedlm(fileName*"real.CSV", realArr,",")
+
+combinedArray = vcat((round.(gammaArray,3))', Indi)
+Indicomb = hcat(runCounter, combinedArray)
+writedlm(fileName*"predicted.CSV", predictedArr,",")
+
+#writedlm(fileName*"bSolved.CSV", bSolvedArr,",")
+
+
+println("Finished")
+=#

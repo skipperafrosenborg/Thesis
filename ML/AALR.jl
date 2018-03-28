@@ -13,21 +13,21 @@ println("Leeeeroooy Jenkins")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 #mainData = loadIndexDataNoDur(path)
 #fileName = path*"/Results/IndexData/IndexData"
 #mainData = loadConcrete(path)
-#fileName = path*"/Results/Concrete/Concrete"
-mainData = loadHousingData(path)
-fileName = path*"/Results/HousingData/HousingData"
-#mainData = loadCPUData(path)
-#fileName = path*"/Results/CPUData/CPUData"
+#fileName = path*"/Results/Concrete/Run1/Concrete_Run"
+#mainData = loadHousingData(path)
+#fileName = path*"/Results/HousingData/HousingData"
+mainData = loadCPUData(path)
+fileName = path*"/Results/CPUData/Run5/CPUData"
 
 #Reset HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-cd(path)
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+#cd(path)
 
 mainDataArr = Array(mainData)
 halfRows = Int64(floor(size(mainDataArr)[1]/2))
@@ -78,17 +78,12 @@ for i=1:length(z)
 	end
 end
 
-#Print model
-#print(m)
-
 #Get solution status
 status = solve(m);
 
 #Get objective value
 println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
-
-kmax = 60
 
 #Get solution value
 #zSolved = getvalue(z)
@@ -347,7 +342,7 @@ function solveLasso(model)
 	end
 
 	println("Solving Lasso for all gamma")
-	gammaArray = logspace(0, 3, 1000)
+	gammaArray = logspace(0, 3, 100)
 	gamma = 0
 	tol = 1e-6
 
@@ -385,7 +380,7 @@ function solveLasso(model)
 			numNZ = countnz(bSolved)
 
 			if Rsquared > bestNBeta[numNZ+1,2]
-				bestNBeta[numNZ+1,2] = Rsquared
+				bestNBeta[numNZ+1,2] = getRSquared(standXTest,standYTest,bSolved)
 				bestNBeta[numNZ+1,3] = gamma
 				bestNBeta[numNZ+1,4:bCols+3] = bSolved
 			end
@@ -468,7 +463,7 @@ function solveForAllK(model, kmax)
 
 			#println("Starting to solve stage 2 model with kMax = $i and gamma = $j")
 
-			Gurobi.writeproblem(model, "testproblem.lp")
+			#Gurobi.writeproblem(model, "testproblem.lp")
 
 			#Solve Stage 2 model
 			status = Gurobi.optimize!(model)
@@ -576,7 +571,7 @@ function solveAndLogForAllK(model, kmax)
 			Gurobi.updatemodel!(model)
 
 			#Set new Big M
-			newBigM = 3#tau*norm(warmStartBeta, Inf)
+			newBigM = 10#tau*norm(warmStartBeta, Inf)
 			changeBigM(model,newBigM)
 			for j in 1:length(gammaArray)
 				gamma=gammaArray[j]
@@ -584,7 +579,7 @@ function solveAndLogForAllK(model, kmax)
 
 				#println("Starting to solve stage 2 model with kMax = $i and gamma = $j")
 
-				Gurobi.writeproblem(model, "testproblem.lp")
+				#Gurobi.writeproblem(model, "testproblem.lp")
 
 				#Solve Stage 2 model
 				status = Gurobi.optimize!(model)
@@ -772,7 +767,7 @@ while !isempty(cuts)
 
 	#Resolve problem
 	Gurobi.updatemodel!(stage2Model)
-	Gurobi.writeproblem(stage2Model, "testproblem2.lp")
+	#Gurobi.writeproblem(stage2Model, "testproblem2.lp")
 	#println(stage2Model)
 	best3Beta, solArr = solveAndLogForAllK(stage2Model, kmax)
 
@@ -785,13 +780,21 @@ while !isempty(cuts)
 	end
 end
 
-best3Beta
+
+best3Beta[1,1] = getRSquared(standXTest, standYTest, best3Beta[1,4:end])
+best3Beta[2,1] = getRSquared(standXTest, standYTest, best3Beta[2,4:end])
+best3Beta[3,1] = getRSquared(standXTest, standYTest, best3Beta[3,4:end])
+
+best3Beta = cat(2,signifBoolean,best3Beta)
+
+
 
 f = open(fileName*"AALRBestK.csv", "w")
-write(f, "Rsquared,k,gamma,"*expandedColNamesToString(colNames)*"\n")
+write(f, "Significant,Rsquared,k,gamma,"*expandedColNamesToString(colNames)*"\n")
 writecsv(f,best3Beta)
 close(f)
 #println(getRMSE(standXTest, standYTest, best3Beta[1,4:111]))
 #println(getRMSE(standXTest, standYTest, best3Beta[2,4:111]))
 #println(getRMSE(standXTest, standYTest, best3Beta[3,4:111]))
-Gurobi.writeproblem(stage2Model, "testproblem3.lp")
+#Gurobi.writeproblem(stage2Model, "testproblem3.lp")
+println("Complete")
