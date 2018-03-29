@@ -14,14 +14,12 @@ function generateLassoModel(Xtrain, Ytrain, gamma)
 	@constraint(M,  b .<= t)
 	@constraint(M, -t .<= b)
 
-	return M
-end
-
-function solveModel(M::JuMP.Model, Xtrain)
 	solve(M)
-	
 
-	return getvalue(b), "solved by worker $(myid())"
+#	println("solved by worker $(myid())")
+	return getvalue(b)
+
+#	return M
 end
 
 function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
@@ -32,8 +30,6 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 			end
 		end
 	end
-
-	k = countnz(bSolved)
 
 	#In-Sample R-squared value
 	errors = (Ytrain-Xtrain*bSolved)
@@ -54,15 +50,13 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 		Indicator = 0
 	end
 
-
 	return ISRsquared, Indicator, YestimateValue#, bSolved
 end
 
 function generatSolveAndProcess(Xtrain, Ytrain, Xpred, Ypred, gamma)
-	M = generateLassoModel(Xtrain, Ytrain, gamma)
-	bSolved = solveModel(M)
+	bSolved = generateLassoModel(Xtrain, Ytrain, gamma)
 
-	ISRsquared, Indicator, YestimateValue = processOutput(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	ISRsquared, Indicator, YestimateValue = processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 
 	return ISRsquared, Indicator, YestimateValue#, bSolved
 end
