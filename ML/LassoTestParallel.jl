@@ -1,11 +1,13 @@
 #LASSO
-#using JuMP
-#using Gurobi
-#using StatsBase
+using StatsBase
 using DataFrames
 using CSV
-#using Bootstrap #External packages, must be added
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+
+trainingSizeInput = parse(Int64, ARGS[1])
+println(typeof(trainingSizeInput))
+
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
 cd(path)
 @everywhere include("ParallelModelGeneration.jl")
 include("SupportFunction.jl")
@@ -16,15 +18,16 @@ println("Leeeeroooy Jenkins")
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
-function runLassos(VIX, raw, expTrans ,timeTrans, TA, trainingSize)
+function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/"
-	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/"
+	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/"
 	#mainData = loadIndexDataNoDur(path)
 	#mainData = loadIndexDataNoDurVIX(path)
 	mainData = loadIndexDataNoDurLOGReturn(path)
 
-	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
+	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
+	path = "/zhome/9f/d/88706/SpecialeCode/"
 	dateAndReseccion = Array(mainData[:,end-1:end])
 	mainDataArr = Array(mainData[:,1:end-2])
 	mainDataArr[1,end]
@@ -35,8 +38,8 @@ function runLassos(VIX, raw, expTrans ,timeTrans, TA, trainingSize)
 	nCols = size(mainDataArr)[2]
 
 	#fileName = path*"/Results/IndexData/LassoTests/240-1/2401_Shrink_"
-	fileName = path*"/Results/Test/Parallel/"
-	fileName = path*"/Results/IndexData/LassoTest/"*string(trainingSize)*"-1/"*string(trainingSize)*"1_Shrink_"
+	#fileName = path*"/Results/Test/Parallel/"
+	fileName = path*"Results/IndexData/LassoTest/"*string(trainingSize)*"-1/"*string(trainingSize)*"1_Shrink_"
 
 	#Reset HPC path
 	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
@@ -140,12 +143,12 @@ function runLassos(VIX, raw, expTrans ,timeTrans, TA, trainingSize)
 	#writedlm(fileName*"bSolved.CSV", bSolvedArr,",")
 end
 
-@time(
-#Testing raw dataset
+#@time(
+	#Testing raw dataset
 for timeTrans = 0:1
 	for expTrans = 0:1
 		for TA = 0:1
-			runLassos(0, 0, timeTrans, expTrans, TA, 12)
+			runLassos(0, 1, timeTrans, expTrans, TA, trainingSizeInput)
 		end
 	end
 end
@@ -155,13 +158,13 @@ for VIX = 0:1
 	for timeTrans = 0:1
 		for expTrans = 0:1
 			for TA = 0:1
-				runLassos(VIX, 1, timeTrans, expTrans, TA, 12)
+				runLassos(VIX, 0, timeTrans, expTrans, TA, trainingSizeInput)
 			end
 		end
 	end
 end
-)
+#)
 
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
-cd(path)
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+#cd(path)
 println("Finished")
