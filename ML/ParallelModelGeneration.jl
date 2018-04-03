@@ -1,9 +1,10 @@
 using JuMP
 using Gurobi
+env = Gurobi.Env()
 
 function generateLassoModel(Xtrain, Ytrain, gamma)
 	bCols = size(Xtrain)[2]
-	M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0))
 	@variables M begin
 			b[1:bCols]
 			t[1:bCols]
@@ -40,7 +41,7 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 
 	#Indicator Results
 	YpredValue = Ypred[1]
-	Yestimate = Xpred*bSolved
+	Yestimate = Xpred'*bSolved
 	YestimateValue = Yestimate[1]
 	if YpredValue >= 0 && YestimateValue >= 0
 		Indicator = 1

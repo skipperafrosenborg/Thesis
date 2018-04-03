@@ -1,12 +1,16 @@
 using StatsBase
 using DataFrames
 using CSV
-using Bootstrap #External packages, must be added
 include("SupportFunction.jl")
-include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/Results/IndexData/LassoTests/12-1 VIX/"
+folder = "12"
+for i = [12, 24, 36, 48, 120, 240]
+    folder = string(i)
+    writeFile()
+end
+
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*folder*"-1/"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 
 stringArr = Array{String}(10)
@@ -14,20 +18,24 @@ for j = 1:10
     stringArr[j] = "gamma =$j"
 end
 
-function logStuff(raw, time, exp, TA)
-    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/Results/IndexData/LassoTests/12-1 VIX/"
+function logStuff(VIX, raw, timeTrans, expTrans, TA)
+    timeSpan = parse(Int64,folder)
     tempString = ""
     if raw == 0
-        tempString = tempString*"Macro"
+        if VIX ==1
+            tempString = tempString*"VIX_Macro"
+        else
+            tempString = tempString*"Macro"
+        end
     else
         tempString = tempString*"Raw"
     end
 
-    if time == 1
+    if timeTrans == 1
         tempString = tempString*"Time"
     end
 
-    if exp == 1
+    if expTrans == 1
         tempString = tempString*"Exp"
     end
 
@@ -35,15 +43,29 @@ function logStuff(raw, time, exp, TA)
         tempString = tempString*"TA"
     end
 
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
     cd(path)
-    y_real = CSV.read("121_Shrink_Raw_Real.CSV",
-        delim = ',', nullable=false, header=["y_real"])
+    y_realFull = CSV.read("RealValue.CSV",
+        delim = ',', nullable=false, header=["Date", "y_real"], types = [Int64, Float64])
 
-    y_hat = CSV.read("121_Shrink_"*tempString*"_predicted.CSV",
-        delim = ',', nullable=false, header=stringArr, types=[Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64])
+    y_realTimeSpan = zeros(size(y_realFull)[1]-timeSpan)
+    for k = 1:size(y_realFull)[1]-timeSpan-1
+        y_realTimeSpan[k] = mean(y_realFull[k:k+timeSpan-1,2])
+    end
 
-    y_real = y_real[1:end,:]
-    y_hat = y_hat[1:end,:]
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*folder*"-1/"
+    cd(path)
+
+    y_real = CSV.read(folder*"1_Shrink_"*tempString*"_real.CSV", delim = ',', nullable = false, header = ["Iteration",
+        "Date", "Reseccion", "Real Value"], types =[Float64, Int64, Int64, Float64], datarow=2)
+
+    y_hat = CSV.read(folder*"1_Shrink_"*tempString*"_predicted.CSV",
+        delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
+        Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
+
+    y_realTimeSpan = y_realTimeSpan[1:end-1,end]
+    y_real = y_real[1:end,4:end]
+    y_hat = y_hat[1:end,:4:end]
 
     nRows = size(y_hat)[1]
     nCols = size(y_hat)[2]
@@ -52,7 +74,7 @@ function logStuff(raw, time, exp, TA)
     meanErr = Array{Float64}(nCols)
     RMSE = Array{Float64}(nCols)
     Rsquare = Array{Float64}(nCols)
-    SSTO = sum((y_real[i,1]-mean(y_real[:,1]))^2 for i=1:nRows)
+
 
     for g = 1:10
         currentCol = g
@@ -63,20 +85,29 @@ function logStuff(raw, time, exp, TA)
                 trueClass += 1
             end
         end
+        println(fileName,"\nNumber of true clasess = ", trueClass)
         classificationRate[currentCol] = trueClass/nRows
+
+        # Fix R^2, skal den regnes som gennemsnit over alle de individuelt predicted R^2?
+        # Gennemgå statistiske mål sammen med Esben
+
+        # SSTO for each i = (y_real (the actual one) - y_realTimeSpan)^2
+        # R^2 for each i = squared err / SSTO
 
         # Mean Error rate
         # Calculate RMSE
         # Calculate R^2
+        indvRSquared = Array{Float64}(nRows,1)
         errSum = 0
         errSquaredSum = 0
         for row = 1:nRows
+            indvRSquared = (y_real[row,1]-y_hat[row,currentCol])^2/(y_real[row,1]-y_realTimeSpan[row])^2
             errSum += abs(y_real[row,1] - y_hat[row,currentCol])
             errSquaredSum += (y_real[row,1] - y_hat[row,currentCol])^2
         end
         meanErr[currentCol] = errSum/nRows
         RMSE[currentCol] = sqrt(errSquaredSum/nRows)
-        Rsquare[currentCol] = 1- errSquaredSum/SSTO
+        Rsquare[currentCol] = 1-mean(indvRSquared)
 
         # Calculate insample error
 
@@ -101,27 +132,45 @@ function logStuff(raw, time, exp, TA)
     tempArr[1,6] = findmax(Rsquare)[2]
     tempArr[1,7] = findmax(meanErr)[2]
     tempArr[1,8] = findmax(RMSE)[2]
-
     #println("Classification: ",findmax(classificationRate))
     #println("OoS R²: ",findmax(Rsquare))
     #println("Mean Absolute Error: ",findmin(meanErr))
     #println("RMSE: ",findmin(RMSE))
 
-    return tempArr
+    return tempArr, tempString
 end
 
-counterIter = 1
-logArr = zeros(16,8)
+function writeFile()
+    counterIter = 1
+    logArr = zeros(24,8)
+    stringToAppend = Array{String}(24,1)
 
-for raw = 0:1
-	for time = 0:1
-		for exp = 0:1
-			for TA = 0:1
-				logArr[counterIter,:] = logStuff(raw, time, exp, TA)
+    for timeTrans = 0:1
+    	for expTrans = 0:1
+    		for TA = 0:1
+    			logArr[counterIter,:], stringToAppend[counterIter,1] = logStuff(0, 1, timeTrans, expTrans, TA)
                 counterIter += 1
-			end
-		end
-	end
+    		end
+    	end
+    end
+
+    for VIX = 0:1
+    	for timeTrans = 0:1
+    		for expTrans = 0:1
+    			for TA = 0:1
+    				logArr[counterIter,:], stringToAppend[counterIter,1]= logStuff(VIX, 0, timeTrans, expTrans, TA)
+                    counterIter += 1
+    			end
+    		end
+    	end
+    end
+
+
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/Summary "*folder
+    f = open(path*".csv", "w")
+    write(f, "Dataset, Classification Rate, R^2, Mean Error, RMSE, Classification Rate Index, R^2 Index, Mean Error Index, RMSE Index\n")
+    writecsv(f,hcat(stringToAppend,logArr))
+    close(f)
 end
 
 #=
