@@ -14,17 +14,18 @@ println("Leeeeroooy Jenkins")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 #HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
-mainData = loadIndexDataNoDur(path)
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+mainData = loadIndexDataNoDurLOGReturn(path)
 fileName = path*"/Results/IndexData/IndexData"
 
 #Reset HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-cd(path)
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+#cd(path)
 
-mainDataArr = Array(mainData)
+dateAndReseccion = Array(mainData[:,end-1:end])
+mainDataArr = Array(mainData[:,1:end-2])
 
 colNames = names(mainData)
 
@@ -48,7 +49,6 @@ allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
 
-nGammas = 5
 trainingSize = 12
 predictions = 1
 testRuns = nRows-trainingSize-predictions
@@ -91,7 +91,7 @@ kmax = getobjectivevalue(m)
 
 println("STAGE 1 DONE")
 
-amountOfGammas = 5
+amountOfGammas = 3
 solArr = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
 realArr = zeros((nRows-trainingSize-predictions), 1)
 ISRSquared = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
@@ -106,7 +106,8 @@ bestBeta = []
 
 bigM = 100
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
-gammaArray = log10.(logspace(0.001, log10.(SSTO), amountOfGammas))
+#gammaArray = log10.(logspace(0.001, log10.(SSTO), amountOfGammas))
+gammaArray = log10.(logspace(0.001, 10, amountOfGammas))
 
 # best3Beta[:,1] = Rsquared
 # best3Beta[:,2] = kmax
@@ -117,9 +118,11 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r)
 	println("Solving for all k and gamma")
 		#allColNames = expandedColNamesToString(colNames)
         SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
-		for i in 1:1:kmax
+        gammaArray = log10.(logspace(0.001, SSTO, amountOfGammas))
+		for i in 1:kmax
+            HC = cor(standX)
+
 			for g in 1:length(gammaArray)
-                HC = cor(standX)
 
 				gamma = gammaArray[g]
 
@@ -310,19 +313,19 @@ end
 function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     nRows = size(standX)[1]
 
-
     bSample = []
     allCuts = []
     signifBoolean = zeros(3)
     #stage2Model, HCPairCounter = @time(buildStage2(standX,standY, kmax))
 
     #Gurobi.writeproblem(stage2Model, "testproblem1.lp")
-
-    @time(solveAndLogForAllK(kmax, standXVali, standYVali, r))
+    solveAndLogForAllK(kmax, standXVali, standYVali, r)
 end
 
+#inputArg = parse(Int64, ARGS[1])
+inputArg = 1
 
-for r = 1:(nRows-trainingSize-predictions)
+for r = 1+inputArg*10:10+inputArg*10#(nRows-trainingSize-predictions)
 	standX = allData[r:(trainingSize+r), 1:bCols]
     nRows = size(Xtrain)[1]
     trainingData = Xtrain[:,1:nCols-1]
@@ -330,21 +333,14 @@ for r = 1:(nRows-trainingSize-predictions)
 	standXVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
 	standYVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
 	AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
-
-    for i=1:100
-        if r == floor((nRows-trainingSize-predictions)/100*i)
-            writedlm(fileName*"_solution.CSV",solArr,",")
-            writedlm(fileName*"_realArray.CSV",realArr,",")
-            writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
-            save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
-        end
-    end
 end
 
-writedlm(fileName*"_solution.CSV",solArr,",")
-writedlm(fileName*"_realArray.CSV",realArr,",")
-writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
-save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
+
+
+writedlm(fileName*"_solution"*string(ARGS[1])*".CSV",solArr,",")
+writedlm(fileName*"_realArray"*string(ARGS[1])*".CSV",realArr,",")
+writedlm(fileName*"_ISRSquared"*string(ARGS[1])*".CSV",ISRSquared,",")
+save(fileName*"bSolMatrix"*string(ARGS[1])*".jld", "data", bSolMatrix)
 
 #=
 cuts = stageThree(best3Beta, standX, standY, allCuts)

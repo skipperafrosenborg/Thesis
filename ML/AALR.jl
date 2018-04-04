@@ -23,7 +23,8 @@ path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCod
 #mainData = loadHousingData(path)
 #fileName = path*"/Results/HousingData/HousingData"
 mainData = loadCPUData(path)
-fileName = path*"/Results/CPUData/Run5/CPUData"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
+fileName = path*"/CPUData/Run4/CPUData"
 
 #Reset HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
@@ -336,13 +337,13 @@ function buildLasso(standX, standY)
 end
 
 function solveLasso(model)
-	bestNBeta = zeros(bCols+1,bCols+3)
+	bestNBeta = zeros(bCols+1,bCols+4)
 	for i=1:bCols+1
 		bestNBeta[i,1] = i-1
 	end
 
 	println("Solving Lasso for all gamma")
-	gammaArray = logspace(0, 3, 100)
+	gammaArray = logspace(-1, 3, 100)
 	gamma = 0
 	tol = 1e-6
 
@@ -380,9 +381,10 @@ function solveLasso(model)
 			numNZ = countnz(bSolved)
 
 			if Rsquared > bestNBeta[numNZ+1,2]
-				bestNBeta[numNZ+1,2] = getRSquared(standXTest,standYTest,bSolved)
-				bestNBeta[numNZ+1,3] = gamma
-				bestNBeta[numNZ+1,4:bCols+3] = bSolved
+				bestNBeta[numNZ+1,2] = getRSquared(standXVali,standYVali,bSolved)
+				bestNBeta[numNZ+1,3] = getRSquared(standXTest,standYTest,bSolved)
+				bestNBeta[numNZ+1,4] = gamma
+				bestNBeta[numNZ+1,5:bCols+4] = bSolved
 			end
 
 			write(f, "$Rsquared, $gamma, $numNZ, $bSolved\n")
@@ -390,7 +392,7 @@ function solveLasso(model)
 		end
 	end
 	f = open(fileName*"LassoBestK.csv", "w")
-	write(f, "k,Rsquared,gamma,"*expandedColNamesToString(colNames)*"\n")
+	write(f, "k,Rsquared Vali, Rsquared Test,gamma,"*expandedColNamesToString(colNames)*"\n")
 	writecsv(f,bestNBeta)
 	close(f)
 	println("Solve all Lasso problems")
@@ -399,6 +401,7 @@ end
 
 lassoM = buildLasso(standX, standY)
 bestNLASSO = solveLasso(lassoM)
+
 
 stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
 
@@ -787,12 +790,18 @@ best3Beta[3,1] = getRSquared(standXTest, standYTest, best3Beta[3,4:end])
 
 best3Beta = cat(2,signifBoolean,best3Beta)
 
-
-
 f = open(fileName*"AALRBestK.csv", "w")
 write(f, "Significant,Rsquared,k,gamma,"*expandedColNamesToString(colNames)*"\n")
 writecsv(f,best3Beta)
 close(f)
+
+bSolvedLinReg = inv(standX'*standX)*standX'*standY
+standLinReg = getRSquared(standXTest,standYTest,bSolvedLinReg)
+f = open(fileName*"standardLinReg.csv", "w")
+write(f, "R² \n")
+writecsv(f,standLinReg)
+close(f)
+
 #println(getRMSE(standXTest, standYTest, best3Beta[1,4:111]))
 #println(getRMSE(standXTest, standYTest, best3Beta[2,4:111]))
 #println(getRMSE(standXTest, standYTest, best3Beta[3,4:111]))

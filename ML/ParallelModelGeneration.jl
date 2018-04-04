@@ -1,9 +1,10 @@
 using JuMP
 using Gurobi
+env = Gurobi.Env()
 
 function generateLassoModel(Xtrain, Ytrain, gamma)
 	bCols = size(Xtrain)[2]
-	M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0))
 	@variables M begin
 			b[1:bCols]
 			t[1:bCols]
@@ -14,14 +15,12 @@ function generateLassoModel(Xtrain, Ytrain, gamma)
 	@constraint(M,  b .<= t)
 	@constraint(M, -t .<= b)
 
-	return M
-end
-
-function solveModel(M::JuMP.Model, Xtrain)
 	solve(M)
-	
 
-	return getvalue(b), "solved by worker $(myid())"
+#	println("solved by worker $(myid())")
+	return getvalue(b)
+
+#	return M
 end
 
 function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
@@ -33,8 +32,6 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 		end
 	end
 
-	k = countnz(bSolved)
-
 	#In-Sample R-squared value
 	errors = (Ytrain-Xtrain*bSolved)
 	errorTotal = sum(errors[i]^2 for i=1:length(errors))
@@ -44,7 +41,7 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 
 	#Indicator Results
 	YpredValue = Ypred[1]
-	Yestimate = Xpred*bSolved
+	Yestimate = Xpred'*bSolved
 	YestimateValue = Yestimate[1]
 	if YpredValue >= 0 && YestimateValue >= 0
 		Indicator = 1
@@ -54,15 +51,13 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 		Indicator = 0
 	end
 
-
 	return ISRsquared, Indicator, YestimateValue#, bSolved
 end
 
 function generatSolveAndProcess(Xtrain, Ytrain, Xpred, Ypred, gamma)
-	M = generateLassoModel(Xtrain, Ytrain, gamma)
-	bSolved = solveModel(M)
+	bSolved = generateLassoModel(Xtrain, Ytrain, gamma)
 
-	ISRsquared, Indicator, YestimateValue = processOutput(Xtrain, Ytrain, Xpred, Ypred, gamma)
+	ISRsquared, Indicator, YestimateValue = processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 
 	return ISRsquared, Indicator, YestimateValue#, bSolved
 end
