@@ -270,6 +270,10 @@ function getBetaAndGamma(standX,standY, kmax)
 	gammaArray
     distance = 125
 	while (k!=kmax && iterCounter <= 25)
+        if iter>500 || iter <1
+            break
+        end
+
 		bSolved, k = solveLasso(standX,standY,gammaArray[iter])
         #println("k= $k \t distance = $distance, iter = $iter")
         if k > kmax
@@ -296,7 +300,7 @@ function getBetaAndGamma(standX,standY, kmax)
 	return bSolved, k
 end
 
-function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, rightBranchMatrix, searchSize, HC)
+function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, rightBranchMatrix, searchSize, HC, rightBranchBool)
     HCPairCounter = 0
     #println("Building model")
     #Define parameters and model
@@ -370,10 +374,13 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
             + sum(z[j] for j=find(x -> x == 0, leftBranchMatrix)) <= searchSize)
     end
 
-    if leftBranchMatrix != rightBranchMatrix
-        for row in 2:size(rightBranchMatrix)[2]
-            @constraint(stage2Model, sum(1-z[j] for j=find(rightBranchMatrix[:,row]))
-                + sum(z[j] for j=find(x -> x == 0, rightBranchMatrix[:,row])) >= searchSize + 1)
+    if rightBranchBool
+        println("Added right branch")
+        if leftBranchMatrix != rightBranchMatrix
+            for row in 2:size(rightBranchMatrix)[2]
+                @constraint(stage2Model, sum(1-z[j] for j=find(rightBranchMatrix[:,row]))
+                    + sum(z[j] for j=find(x -> x == 0, rightBranchMatrix[:,row])) >= searchSize + 1)
+            end
         end
     end
 
@@ -418,19 +425,20 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                 leftBranchMatrix = bSolved
                 rightBranchMatrix = bSolved
             end
-			searchSize = 1
+			searchSize = 2
 			#println("kMax = ",i," g = ", g)
 			oldObj = 1000.0
             obj = 1000.0
             bestObj = 9999
 			gamma = gammaArray[g]
             iter = 1
+            rightBranchBool = false
 			while (true)
                 #println("Iteration $iter")
                 oldObj = obj
 
                 bSolved, status, obj, gap = buildAndSolveProblem(i, standX, standY, r, gamma,
-                    leftBranchMatrix, rightBranchMatrix, searchSize, HC)
+                    leftBranchMatrix, rightBranchMatrix, searchSize, HC, rightBranchBool)
 
                 #println("Kmax = $i and bsolved = ", countnz(bSolved))
 
@@ -451,7 +459,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
 
                     # Weak diversification --> Increase searchSize + 1
                     # When making diversification funciton ensure that there is a k <= kmax constraint / limit
-                    if searchSize >= i
+                    if searchSize >= i+1
                         break
                     else
                         if i >= 8 && searchSize < i-2
@@ -473,7 +481,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     bestbSolved = bSolved
                     # Add constraint to rightBranchMatrix Delta(x,x_old) >= k + 1
                     if typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64
-                        if searchSize < i
+                        if searchSize < i+1
                             if i >= 8 && searchSize < i-2
                                 searchSize += 2
                             else
@@ -487,7 +495,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     end
 
                     #println("leftBranchMatrix = ", leftBranchMatrix)
-
+                    rightBranchBool = true
                     rightBranchMatrix = hcat(rightBranchMatrix, leftBranchMatrix)
 
                     # Add constraints to leftBranchMatrix Delta(x,x_new) <= k
@@ -499,19 +507,19 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     continue
                 end
 
-                # Return optimal with same solution
+                # Return optimal with same or worse solution
                 if status == :Optimal && obj+1e-3 >= bestObj
-                    #println("Went into ",status, ", with worse objective")
+                    println("Went into ",status, ", with worse objective")
 
                     if typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64
-                        if searchSize < i
+                        if searchSize < i+1
                             if i >= 8 && searchSize < i-2
                                 searchSize += 2
                             else
                                 searchSize += 1
                             end
-                            #println("searchSize is: ",searchSize)
                         else
+                            #Break loop as we can't diversify any more.
                             break
                         end
                     end
@@ -521,6 +529,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                         iter += 1
                         continue
                     else
+                        rightBranchBool = true
                         rightBranchMatrix = hcat(rightBranchMatrix, leftBranchMatrix)
                     end
                     leftBranchMatrix = 0
@@ -536,10 +545,6 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     #println("Went into ",status, ", with better objective")
                     bestObj = obj
                     bestbSolved = bSolved
-
-                    if iter == 1
-                        rightBranchMatrix = hcat(rightBranchMatrix, leftBranchMatrix)
-                    end
 
                     # Add constraints to leftBranchMatrix Delta(x,x_new) <= k
                     leftBranchMatrix = bSolved
@@ -696,27 +701,36 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     signifBoolean = zeros(3)
 
     warmstart = false
-    bestObjtives = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
+	bestObjtivesNormal = @time(solveAndLogForAllKMath(kmax, standXVali, standYVali, r))
+    println("This was time for mathheuristic")
+
+    warmstart = false
+    bestObjtivesWarmstart = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     print("This was time for non warmstart")
     println("")
 
     warmstart = true
-    @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
+    bestObjtivesMath = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     println("This was time for warmstart")
 
-    warmstart = false
-	@time(solveAndLogForAllKMath(kmax, standXVali, standYVali, r))
-    println("This was time for mathheuristic")
 
 
-    return bestObjtives
+
+    return bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath
 end
 
 SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 #gammaArray = log10.(logspace(0.01, SSTO, 3))
 gammaArray = log10.(logspace(0.01, 5, 3))
 
-bestObjtives = 1
+bestObjtivesNormal = 1
+bestObjtivesWarmstart = 1
+bestObjtivesMath = 1
+
+writedlm(path*"/bestNorm.csv",bestObjtivesNormal)
+writedlm(path*"/bestWarm.csv",bestObjtivesWarmstart)
+writedlm(path*"/bestMath.csv",bestObjtivesMath)
+
 r=1
 for r = 1:100:501#(nRows-trainingSize-predictions)
 	standX = allData[r:(trainingSize+r), 1:bCols]
@@ -725,7 +739,7 @@ for r = 1:100:501#(nRows-trainingSize-predictions)
 	standY = allData[r:(trainingSize+r), bCols+1]
 	standXVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
 	standYVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
-	bestObjtives = AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
+	bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath  = AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
     #for i=1:100
     #    if r == floor((nRows-trainingSize-predictions)/100*i)
@@ -736,6 +750,10 @@ for r = 1:100:501#(nRows-trainingSize-predictions)
     #    end
     #end
 end
+
+writedlm(path*"/bestNorm.csv",bestObjtivesNormal)
+writedlm(path*"/bestWarm.csv",bestObjtivesWarmstart)
+writedlm(path*"/bestMath.csv",bestObjtivesMath)
 
 #writedlm(fileName*"_solution.CSV",solArr,",")
 #writedlm(fileName*"_realArray.CSV",realArr,",")
