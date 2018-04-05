@@ -75,6 +75,7 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
     RMSE = Array{Float64}(nCols)
     Rsquare = Array{Float64}(nCols)
 
+    SSTO = sum((y_real[i,1]-mean(y_real[:,1]))^2 for i=1:nRows)
 
     for g = 1:10
         currentCol = g
@@ -85,7 +86,6 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
                 trueClass += 1
             end
         end
-        println(fileName,"\nNumber of true clasess = ", trueClass)
         classificationRate[currentCol] = trueClass/nRows
 
         # Fix R^2, skal den regnes som gennemsnit over alle de individuelt predicted R^2?
@@ -100,15 +100,20 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
         indvRSquared = Array{Float64}(nRows,1)
         errSum = 0
         errSquaredSum = 0
+        SSres = 0
+        SSTO = 0
         for row = 1:nRows
-            indvRSquared = (y_real[row,1]-y_hat[row,currentCol])^2/(y_real[row,1]-y_realTimeSpan[row])^2
+            #indvRSquared[row] = 1-((y_real[row,1] - y_hat[row,currentCol])^2/(y_real[row,1]-y_realTimeSpan[row])^2)
+            SSres += (y_real[row,1] - y_hat[row,currentCol])^2
+            SSTO += (y_real[row,1]-y_realTimeSpan[row])^2
             errSum += abs(y_real[row,1] - y_hat[row,currentCol])
             errSquaredSum += (y_real[row,1] - y_hat[row,currentCol])^2
         end
         meanErr[currentCol] = errSum/nRows
         RMSE[currentCol] = sqrt(errSquaredSum/nRows)
-        Rsquare[currentCol] = 1-mean(indvRSquared)
-
+        Rsquare[currentCol] = 1-SSres/SSTO
+        #Rsquare[currentCol] = mean(indvRSquared)
+        #println((1-errSquaredSum/SSTO))
         # Calculate insample error
 
         # Process data
