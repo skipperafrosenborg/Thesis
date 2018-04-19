@@ -11,31 +11,19 @@ include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 #Esben's path
 path = "$(homedir())/Documents/GitHub/Thesis/Data/MonthlyReturns"
-#mainData = loadIndexDataNoDurLOGReturn(path)
 
-mainData = loadIndexDataNoDur(path)
 mainData = loadIndexDataNoDurLOGReturn(path)
 
 mainDataArr = Array(mainData)
-
-nRows = size(mainDataArr)[1]
-nCols = size(mainDataArr)[2]
 
 startRow = 1
 endRow = 100
+trainingObservations = 100
 mainXarr = mainDataArr[startRow:endRow,1:10]
 indexes = size(mainXarr)[2]
 
-#creating the covariance matrix of the training data
-Sigma = cov(mainXarr)
-
-#creating the mean of the returns (here our forecasts should be used instead)
-Mu = mean(mainXarr, 1)'
 
 #### WITH RISK AVERSION
-mainData = loadIndexDataNoDurLOGReturn(path)
-
-mainDataArr = Array(mainData)
 
 nRows = size(mainDataArr)[1]
 nCols = size(mainDataArr)[2]
@@ -45,7 +33,7 @@ portfolioMVTotal = []
 portfolioMVTotal = push!(portfolioMVTotal, 1)
 portfolioMVIndividual = []
 portfolioMVIndividual = push!(portfolioMVIndividual, 0)
-wMVtracker = zeros(985,10)
+wMVtracker = zeros((nRows-trainingObservations-1),10)
 
 
 w1N = repeat([0.1], outer = 10)
@@ -54,9 +42,9 @@ portfolio1NTotal = push!(portfolio1NTotal, 1)
 portfolio1NIndividual = []
 portfolio1NIndividual = push!(portfolio1NIndividual, 0)
 
-for rStart = 1:(nRows-endRow-1)
+for rStart = 1:(nRows-trainingObservations-1)
     startRow = rStart
-    endRow = rStart+100
+    endRow = rStart+trainingObservations
     mainXarr = mainDataArr[startRow:endRow,1:10]
     indexes = size(mainXarr)[2]
 
@@ -123,6 +111,15 @@ writedlm("MV100obsG10versus1N.csv", combinedPortfolios,",")
 
 writedlm("MV100obsPortfolioWeightsG10.csv", wMVtracker,",")
 
-function meanVarianceOptimization
-    
+function meanVariancePPDOptimization(fullX, startRow, endRow, errors, meanForecasts)
+
+end
+
+"""
+Utilizing LASSO to create a classification; 1, it goes up, 0, it goes down
+The portfolio is then a 1/K, where K is the amount of indexes predicted to go up
+No weighting between them or variance optimization, hence quite basic
+"""
+function ClassificationPortfolio(fullX, firstRow, indicators)
+
 end
