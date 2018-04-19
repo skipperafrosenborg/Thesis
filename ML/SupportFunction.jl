@@ -1,4 +1,13 @@
 """
+findMaxCor(standX, bestSolution)
+Returns the maximum correlation form the selected variables
+"""
+function findMaxCor(standX, bestSolution)
+	chosenVar = find(bestSolution)
+	return maximum(cor(standX[:,chosenVar])-Diagonal(cor(standX[:,chosenVar])))
+end
+
+"""
 Function that returns the zscore column zscore for each column in the Matrix.
 Must have at least two columns
 """
@@ -208,12 +217,28 @@ end
 Transforming X with time elements -3, -6 and -12
 """
 function expandWithTime3612(X)
-	println("Transforming with t-3, t-6 and t-12")
+	println("Transforming with t-2, t-3, ..., t-12")
+	#println("Transforming with t-3, t-6 and t-12")
 	#the first row is -1 already, so it will be row +2, +5 and +11
 	expandedX = copy(Array{Float64}(X))
 	xCols = size(expandedX)[2]
 	xRows = size(expandedX)[1]
 
+	for k=0:10
+		# -2:-12 time series
+		for i=1:xCols
+			insertArray = []
+			for j=1:(xRows-(k+1))
+				push!(insertArray, expandedX[j+(k+1),i])
+			end
+			for j=(xRows-k):(xRows)
+				push!(insertArray, 0)
+			end
+			expandedX = hcat(expandedX, insertArray)
+		end
+	end
+
+	#=
 	# -3 time series
 	for i=1:xCols
 		insertArray = []
@@ -249,6 +274,7 @@ function expandWithTime3612(X)
 		end
 		expandedX = hcat(expandedX, insertArray)
 	end
+	=#
 
 	#Ensure we return a Float64 array
 	expandedX = copy(Array{Float64}(expandedX))
@@ -535,17 +561,37 @@ Generating samplesize amount of beta-values for a beta distribution
 """
 function createBetaDistribution(bSample, standX, standY, k, sampleSize, rowsPerSample, gamma, allCuts, bestZ)
 	println("0% through samples")
+	empty1 = 0
+	empty2 = 0
+	continueBool = false
 	for i=1:sampleSize
+		continueBool = false
 		sampleRows = selectSampleRowsWR(rowsPerSample, nRows)
 		sampleX = createSampleX(standX, sampleRows)
 		sampleY = createSampleY(standY, sampleRows)
-		bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts, bestZ);
+		HC = cor(sampleX) # this is added to support function below
+		#println("Maximum pairwise correlation is: ",findMaxCor(standX, bestZ))
+
+		bSample[i,:], empty1, empty2 = buildAndSolveStage2(sampleX, sampleY, k, gamma, false, [], allCuts, bestZ, HC)
+		if empty1 == 9999
+			newStandX = sampleX
+			newStandY = sampleY
+			newK = k
+			newGamma = gamma
+			newAllCuts = allCuts
+			newBestZ = bestZ
+			newHC = HC
+			#println("\n\n\n STOP EVERYTHING \n\n\n")
+		end
+
+		#bSample[i,:] = solveForBeta(sampleX, sampleY, k, gamma, allCuts, bestZ); #This is replaced by above function
 		#bSample[i,:] = solveForBetaClosedForm(sampleX, sampleY, k, bestZ)
 		if i == floor(sampleSize/2)
 			println("50% through samples, $i missing")
 		end
 	end
 	println("100% through samples")
+	return bSample
 end
 
 function solveForBetaClosedForm(X, Y, k, bestZ)
@@ -572,8 +618,10 @@ function solveForBetaClosedForm(X, Y, k, bestZ)
 	return bSolved
 end
 
+
 function solveForBeta(X, Y, k, gamma, allCuts, bestZ)
 	TempStage2Model, HCPairCounter = buildStage2(X, Y, k);
+
 	#Set kMax rhs constraint
 	curUB = Gurobi.getconstrUB(TempStage2Model) #Get current UBbounds
 	curUB[bCols*4+2] = k #Change upperbound in current bound vector
@@ -586,8 +634,8 @@ function solveForBeta(X, Y, k, gamma, allCuts, bestZ)
 
 	changeGamma(TempStage2Model, gamma)
 
-	#fixSolution TO BE IMPLEMENTED
-	fixSolution(TempStage2Model, bestZ)
+	#fixSolution
+	fixSolution(TempStage2Model, bestZ, HCPairCounter)
 
 	if !isempty(allCuts)
 		addCuts(TempStage2Model, allCuts, 0)
@@ -603,6 +651,29 @@ function solveForBeta(X, Y, k, gamma, allCuts, bestZ)
 	#Get solution and calculate R^2
 	bSolved = sol[1:bCols]
 	return bSolved
+end
+
+"""
+Function that fixs the z variables to the same as previous to see if the
+distribution around those values are constant.
+"""
+function fixSolution(model, bestZ, HCPairCounter)
+	if !isempty(bestZ)
+		curUB = Gurobi.getconstrUB(model)
+		curLB = Gurobi.getconstrLB(model)
+		cutCols = size(bestZ)[1]
+		# Access the first psudo cut contraint (not active as we rebuild the model)
+		# and sets this constraint to be == number of variables
+		curUB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
+		curLB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
+		Gurobi.setconstrUB!(model, curUB)
+		Gurobi.setconstrLB!(model, curLB)
+		## Sets all active z varibles to 1 and all non active to 0 to ensure we pick these variables.
+		for c = 1:(cutCols)
+			Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+1], [bCols+c], [bestZ[c]])
+		end
+	end
+	Gurobi.updatemodel!(model)
 end
 
 function changeBigM(model, newBigM)
@@ -630,22 +701,6 @@ function changeGammaLasso(model, newGamma)
 		Gurobi.changecoeffs!(model, [startRow], [startIndx+i], [newGamma])
 		Gurobi.updatemodel!(model)
 	end
-end
-
-function fixSolution(model, bestZ)
-	if !isempty(bestZ)
-		curUB = Gurobi.getconstrUB(model)
-		curLB = Gurobi.getconstrLB(model)
-		cutCols = size(bestZ)[1]
-		curUB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
-		curLB[4*bCols+1+HCPairCounter+(nCols)+1] = countnz(bestZ)
-		Gurobi.setconstrUB!(model, curUB)
-		Gurobi.setconstrLB!(model, curLB)
-		for c = 1:(cutCols)
-			Gurobi.changecoeffs!(model, [4*bCols+1+HCPairCounter+(nCols)+1], [bCols+c], [bestZ[c]])
-		end
-	end
-	Gurobi.updatemodel!(model)
 end
 
 function addCuts(model, cutMatrix, preCutCounter)

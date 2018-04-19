@@ -4,7 +4,7 @@ env = Gurobi.Env()
 
 function generateLassoModel(Xtrain, Ytrain, gamma)
 	bCols = size(Xtrain)[2]
-	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0))
+	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
 	@variables M begin
 			b[1:bCols]
 			t[1:bCols]
@@ -21,6 +21,30 @@ function generateLassoModel(Xtrain, Ytrain, gamma)
 	return getvalue(b)
 
 #	return M
+end
+
+function lassoValidationAndTest(gamma, xTrain, yTrain, xVali, yVali, xTest, yTest)
+	beta = generateLassoModel(xTrain, yTrain, gamma)
+
+	for i in 1:length(beta)
+		if beta[i] <= 1e-6
+			if beta[i] >= -1e-6
+				beta[i] = 0
+			end
+		end
+	end
+
+	k = countnz(beta)
+	if k == 0
+		maxPairwise = 0
+	else
+		maxPairwise = findMaxCor(xTrain, beta)
+	end
+
+	valiRsqr = getRSquared(xVali, yVali, beta)
+	testRsqr = getRSquared(xTest, yTest, beta)
+
+	return maxPairwise, testRsqr, valiRsqr, k, beta
 end
 
 function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)

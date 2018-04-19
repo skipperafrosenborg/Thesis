@@ -3,11 +3,11 @@ using StatsBase
 using DataFrames
 using CSV
 
-#trainingSizeInput = parse(Int64, ARGS[1])
-trainingSizeInput = 240
+trainingSizeInput = parse(Int64, ARGS[1])
+#trainingSizeInput = 240
 println(typeof(trainingSizeInput))
 
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 cd(path)
 @everywhere include("ParallelModelGeneration.jl")
@@ -19,13 +19,35 @@ println("Leeeeroooy Jenkins")
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
+#=
+VIX = 0
+raw = 1
+expTrans = 0
+timeTrans = 1
+TA = 1
+trainingSize = 240
+=#
+
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/"
-	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/"
-	#mainData = loadIndexDataNoDur(path)
-	#mainData = loadIndexDataNoDurVIX(path)
-	mainData = loadIndexDataNoDurLOGReturn(path)
+	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
+
+
+	#= industry must be one of the following
+	Durbl
+	Enrgy
+	HiTec
+	Hlth
+	Manuf
+	NoDur
+	Other
+	Shops
+	Telcm
+	Utils
+	=#
+	industry = "Enrgy"
+	mainData = loadIndexDataLOGReturn(industry, path)
 
 	path = "/zhome/9f/d/88706/SpecialeCode/"
 	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
@@ -39,7 +61,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 
 	#fileName = path*"/Results/IndexData/LassoTests/240-1/2401_Shrink_"
 	#fileName = path*"/Results/Test/Parallel/"
-	fileName = path*"Results/IndexData/LassoTest/"*string(trainingSize)*"-1/"*string(trainingSize)*"1_Shrink_"
+	fileName = path*"Results/IndexData/LassoTest/"*industry*"/"*string(trainingSize)*"-1/"*string(trainingSize)*"_"
 
 	#Reset HPC path
 	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"

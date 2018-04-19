@@ -10,7 +10,8 @@ for i = [12, 24, 36, 48, 120, 240]
     writeFile()
 end
 
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*folder*"-1/"
+industry = "Enrgy"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 
 stringArr = Array{String}(10)
@@ -43,7 +44,7 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
         tempString = tempString*"TA"
     end
 
-    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"
     cd(path)
     y_realFull = CSV.read("RealValue.CSV",
         delim = ',', nullable=false, header=["Date", "y_real"], types = [Int64, Float64])
@@ -53,13 +54,13 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
         y_realTimeSpan[k] = mean(y_realFull[k:k+timeSpan-1,2])
     end
 
-    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*folder*"-1/"
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
     cd(path)
 
-    y_real = CSV.read(folder*"1_Shrink_"*tempString*"_real.CSV", delim = ',', nullable = false, header = ["Iteration",
+    y_real = CSV.read(folder*"_"*tempString*"_real.CSV", delim = ',', nullable = false, header = ["Iteration",
         "Date", "Reseccion", "Real Value"], types =[Float64, Int64, Int64, Float64], datarow=2)
 
-    y_hat = CSV.read(folder*"1_Shrink_"*tempString*"_predicted.CSV",
+    y_hat = CSV.read(folder*"_"*tempString*"_predicted.CSV",
         delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
         Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
 
@@ -171,107 +172,9 @@ function writeFile()
     end
 
 
-    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/Summary "*folder
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/Summary "*folder
     f = open(path*".csv", "w")
     write(f, "Dataset, Classification Rate, R^2, Mean Error, RMSE, Classification Rate Index, R^2 Index, Mean Error Index, RMSE Index\n")
     writecsv(f,hcat(stringToAppend,logArr))
     close(f)
 end
-
-#=
-raw = 0
-time = 1
-exp = 0
-TA = 1
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/Results/IndexData/LassoTests/240-1 VIX/"
-tempString = ""
-if raw == 0
-    tempString = tempString*"Macro"
-else
-    tempString = tempString*"Raw"
-end
-
-if time == 1
-    tempString = tempString*"Time"
-end
-
-if exp == 1
-    tempString = tempString*"Exp"
-end
-
-if TA == 1
-    tempString = tempString*"TA"
-end
-
-cd(path)
-y_real = CSV.read("2401_Shrink_Raw_Real.CSV",
-    delim = ',', nullable=false, header=["y_real"])
-
-y_hat = CSV.read("2401_Shrink_"*tempString*"_predicted.CSV",
-    delim = ',', nullable=false, header=stringArr, types=[Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64])
-
-y_real = y_real[1:end,:]
-y_hat = y_hat[1:end,:]
-
-nRows = size(y_hat)[1]
-nCols = size(y_hat)[2]
-
-classificationRate = Array{Float64}(nCols)
-meanErr = Array{Float64}(nCols)
-RMSE = Array{Float64}(nCols)
-Rsquare = Array{Float64}(nCols)
-SSTO = sum((y_real[i,1]-mean(y_real[:,1]))^2 for i=1:nRows)
-
-for g = 1:10
-    currentCol = g
-    # Calculate classifaction rate
-    trueClass = 0
-    for row = 1:nRows
-        if sign(y_real[row,1]) == sign(y_hat[row,currentCol])
-            trueClass += 1
-        end
-    end
-    classificationRate[currentCol] = trueClass/nRows
-
-    # Mean Error rate
-    # Calculate RMSE
-    # Calculate R^2
-    errSum = 0
-    errSquaredSum = 0
-    for row = 1:nRows
-        errSum += abs(y_real[row,1] - y_hat[row,currentCol])
-        errSquaredSum += (y_real[row,1] - y_hat[row,currentCol])^2
-    end
-    meanErr[currentCol] = errSum/nRows
-    RMSE[currentCol] = sqrt(errSquaredSum/nRows)
-    Rsquare[currentCol] = 1- errSquaredSum/SSTO
-
-    # Calculate insample error
-
-    # Process data
-end
-
-tempArr = zeros(1,8)
-
-classRate = findmax(classificationRate)[1]
-classIndex = findmax(classificationRate)[2]
-OOSR = findmax(Rsquare)[1]
-OOSRIndex = findmax(Rsquare)[2]
-meanErrVal = findmax(meanErr)[1]
-meanErrIndex = findmax(meanErr)[2]
-RMSEVal = findmax(RMSE)[1]
-RMSEIndex = findmax(RMSE)[2]
-tempArr[1,1] = findmax(classificationRate)[1]
-tempArr[1,5] = findmax(classificationRate)[2]
-tempArr[1,2] = findmax(Rsquare)[1]
-tempArr[1,6] = findmax(Rsquare)[2]
-tempArr[1,3] = findmax(meanErr)[1]
-tempArr[1,7] = findmax(meanErr)[2]
-tempArr[1,4] = findmax(RMSE)[1]
-tempArr[1,8] = findmax(RMSE)[2]
-
-println("Classification: ",findmax(classificationRate))
-println("OoS R²: ",findmax(Rsquare))
-println("Mean Absolute Error: ",findmin(meanErr))
-println("RMSE: ",findmin(RMSE))
-=#

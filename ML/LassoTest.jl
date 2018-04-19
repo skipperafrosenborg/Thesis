@@ -106,22 +106,7 @@ function runLassos(raw, time, exp, TA)
 		errorsMean = Ytrain-mean(Ytrain)
 		errorMeanTotal = sum(errorsMean[i]^2 for i=1:length(errorsMean))
 		ISRsquared = 1-(errorTotal/errorMeanTotal)
-		#=
-		#OOS R-squared value (for more predictions)
-		oosErrors = Ypred - Xpred*bSolved
-		oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
-		oosErrorsMean = Ypred - mean(Ypred)
-		oosErrorsMeanTotal = sum(oosErrorsMean[i]^2 for i=1:length(oosErrorsMean))
-		OOSRsquared = 1-(oosErrorTotal/oosErrorsMeanTotal)
-
-
-		#OOS R-squared value (for single prediction)
-		oosErrors = Ypred - Xpred*bSolved
-		oosErrorTotal = sum(oosErrors[i]^2 for i=1:length(oosErrors))
-		oosSize = sum(Ypred[i]^2 for i=1:length(Ypred))
-		OOSRsquared = sqrt(oosErrorTotal) / sqrt(oosSize)
-		=#
-
+	
 		#Indicator Results
 		YpredValue = Ypred[1]
 		Yestimate = Xpred*bSolved
@@ -134,8 +119,7 @@ function runLassos(raw, time, exp, TA)
 			Indicator = 0
 		end
 
-
-		return ISRsquared, Indicator, YestimateValue#, bSolved
+		return ISRsquared, Indicator, YestimateValue, errors#, bSolved
 	end
 
 	nGammas = 10
