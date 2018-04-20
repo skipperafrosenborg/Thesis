@@ -4,11 +4,11 @@ using DataFrames
 using CSV
 
 trainingSizeInput = parse(Int64, ARGS[1])
-#trainingSizeInput = 240
+trainingSizeInput = 240
 println(typeof(trainingSizeInput))
 
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 cd(path)
 @everywhere include("ParallelModelGeneration.jl")
 include("SupportFunction.jl")
@@ -23,14 +23,14 @@ println("Leeeeroooy Jenkins")
 VIX = 0
 raw = 1
 expTrans = 0
-timeTrans = 1
-TA = 1
+timeTrans = 0
+TA = 0
 trainingSize = 240
 =#
 
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
 	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
 
 
@@ -46,7 +46,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	Telcm
 	Utils
 	=#
-	industry = "Enrgy"
+	industry = "NoDur"
 	mainData = loadIndexDataLOGReturn(industry, path)
 
 	path = "/zhome/9f/d/88706/SpecialeCode/"
@@ -100,7 +100,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	end
 
 	# Standardize
-	standX = zScoreByColumn(mainXarr)
+	standX = mainXarr#zScoreByColumn(mainXarr)
 	standY = mainYarr
 	SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 

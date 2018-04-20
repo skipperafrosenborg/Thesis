@@ -4,13 +4,13 @@ using CSV
 include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
 
+industry = "NewNoDur"
 folder = "12"
 for i = [12, 24, 36, 48, 120, 240]
     folder = string(i)
     writeFile()
 end
 
-industry = "Enrgy"
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 
