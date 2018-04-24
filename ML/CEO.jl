@@ -15,9 +15,6 @@ path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexData"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
 
-
-
-
 trainingSize = 240
 possibilities = 5
 industries = ["NoDur", "Durbl", "Enrgy", "HiTec", "Hlth", "Manuf", "Other", "Shops", "Telcm", "Utils"]
@@ -59,10 +56,7 @@ for l1 = 1:nGammas
     end
 end
 
-nRows
-trainingSize
-
-a
+#=
 for t=1:(nRows-trainingSize-2)
     trainingXArrays = Array{Array{Float64, 2}}(industriesTotal)
     trainingYArrays = Array{Array{Float64, 2}}(industriesTotal)
@@ -91,7 +85,7 @@ for t=1:(nRows-trainingSize-2)
 
     for m = 1:amountOfModels
         #errorArray, betaArray = runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :])
-        
+
         ##Might need some sampling here to have a CDF
         ##Create forecast through validationXRows
         #
@@ -99,7 +93,7 @@ for t=1:(nRows-trainingSize-2)
 
 
 end
-
+=#
 
 
 modelConfigRow = modelConfig[1]
@@ -107,46 +101,130 @@ modelConfigRow = modelConfig[1]
 trainingXArrays = Array{Array{Float64, 2}}(industriesTotal)
 trainingYArrays = Array{Array{Float64, 2}}(industriesTotal)
 t=1
-i=1
-trainingXArrays[i] = XArrays[i][t:(t-1+trainingSize), :]
-trainingYArrays[i] = YArrays[i][t:(t-1+trainingSize), :]
-
+for i = 1:10
+    trainingXArrays[i] = XArrays[i][t:(t-1+trainingSize), :]
+    trainingYArrays[i] = YArrays[i][t:(t-1+trainingSize), :]
+end
 observations = size(trainingXArrays[1])[1]
+
+##Trying to do CEO objective
 
 l1, l2, l3, l4 = modelConfig[30,:]
 env = Gurobi.Env()
-bCols = size(XArrays[1])[2]
-M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
-@variables M begin
-        b[1:10, 1:bCols]
+maxPredictors = 1304
+bCols = floor(Int,zeros(industriesTotal))
+Sigma =  cov(trainingXArrays[1][:,1:10])
+for i = 1:industriesTotal
+    bCols[i] = size(trainingXArrays[i])[2]
 end
-@objective(M,Min,l1*(sum(sqrt((trainingYArrays[1][t]-trainingXArrays[1][t,:]*b[1,:]')^2) for t=1:observations)))
+gamma = 10
+bRows = size(trainingXArrays[1])[1]
+M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
+
+@variables M begin
+        b[1:industriesTotal, 1:maxPredictors] #Beta in LASSO; industry i and predictors 1:1304
+        z[1:industriesTotal, 1:maxPredictors] #auxilliary for 1norm
+        q[1:industriesTotal] #auxilliary for norm
+        f[1:industriesTotal, 1:bRows] #expected return for industry i at time t
+        w[1:industriesTotal, 1:bRows] #weights for industry i at time t
+        r #auxilliary variables for MV optimization
+        c[1:industriesTotal] #auxilliary variables for actual returns
+end
+
+@objective(M,Min,sum(0.5*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(r) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
+
+@constraint(M, sum(gamma*w[:,t]'*Sigma*w[:,t]-f[:,t]'*w[:,t] for t=1:bRows) <= r)
+for i = 1:industriesTotal
+    @constraint(M, norm( [1-q[i];2*(trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])] ) <= 1+q[i]) #second order cone constraint SOC
+end
+@constraint(M,  b .<= z)
+@constraint(M, -z .<= b)
+
+i=1
+norm(trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])
+a
+
+for i = 1:industriesTotal
+    @constraint(M, norm(trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i]) .<= c[i])
+end
+
+for i = 1:10
+    errorArray = (trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
+    errorSum = sum(errorArray)
+    for t = 1:bRows
+        prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
+        @constraint(M, prediction + errorSum == f[i, t])
+    end
+end
+
 
 solve(M)
+getvalue(b)
 
-#	println("solved by worker $(myid())")
-return getvalue(b)
+
+
+runCEO(trainingXArrays, trainingYArrays, modelConfig[30,:])
+
+
+a
+
+
+
+
+
+
+
+
 
 
 function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
+    industriesTotal = 10
     l1, l2, l3, l4 = modelConfigRow
+    env = Gurobi.Env()
+    maxPredictors = 1304
+    bCols = floor(Int,zeros(industriesTotal))
+    Sigma =  cov(trainingXArrays[1][:,1:10])
+    for i = 1:industriesTotal
+        bCols[i] = size(trainingXArrays[i])[2]
+    end
+    gamma = 10
+    bRows = size(trainingXArrays[1])[1]
+    M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
 
-    bCols = size(trainingXArrays[1])[2]
-	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
-	@variables M begin
-			b[1:bCols]
-			t[1:bCols]
-			w
-	end
-	@objective(M,Min,0.5*w+gamma*ones(bCols)'*t)
-	@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w)
-	@constraint(M,  b .<= t)
-	@constraint(M, -t .<= b)
+    @variables M begin
+            b[1:industriesTotal, 1:maxPredictors] #Beta in LASSO; industry i and predictors 1:1304
+            z[1:industriesTotal, 1:maxPredictors] #auxilliary for 1norm
+            q[1:industriesTotal] #auxilliary for norm
+            f[1:industriesTotal, 1:bRows] #expected return for industry i at time t
+            w[1:industriesTotal, 1:bRows] #weights for industry i at time t
+            r[1:industriesTotal] #auxilliary variables for MV optimization
+            c[1:industriesTotal] #auxilliary variables for actual returns
+    end
 
-	solve(M)
+    @objective(M,Min,sum(0.5*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*w[:,t]'*Sigma*w[:,t]-f[:,t]'*w[:,t] for t=1:bRows)) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
 
-#	println("solved by worker $(myid())")
-	return getvalue(b)
+    for i = 1:industriesTotal
+        @constraint(M, norm( [1-q[i];2*(trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])] ) <= 1+q[i]) #second order cone constraint SOC
+    end
+    @constraint(M,  b .<= z)
+    @constraint(M, -z .<= b)
+
+
+    for i = 1:industriesTotal
+        errorArray = (trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
+        errorSum = sum(errorArray)
+        for t = 1:bRows
+            prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
+            @constraint(M, prediction + errorSum == f[i, t])
+        end
+    end
+
+
+    solve(M)
+    getvalue(b)
+
+    return getvalue(b)
+end
 
 
 function generateXandYs(industries, modelMatrix)
