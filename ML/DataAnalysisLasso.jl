@@ -4,7 +4,7 @@ using CSV
 include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
 
-industry = "NewNoDur"
+industry = "Utils"
 folder = "12"
 for i = [12, 24, 36, 48, 120, 240]
     folder = string(i)

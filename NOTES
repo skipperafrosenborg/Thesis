@@ -1,0 +1,39 @@
+Sources of error:
+
+Raw Data Error - No errors found.
+Check by using the following code and ensuring all elements were zero. If all elements are zero,
+then the matrix is skewed correctly.
+  industry = "Other"
+  mainData = loadIndexDataLOGReturn(industry, path)
+  mainDataArr = Array(mainData[:,1:end-2])
+  checkArr=zeros(10,1)
+  for i=1:10
+    checkArr[i] = countnz(mainData[1:end-1,29]-mainData[2:end,i])
+  end
+  checkArr
+
+Expanded Error
+  Time Expand Error
+    Test = expandWithTime3612(dateAndReseccion[:,1:1])
+    check if
+      test[x,1]-test[x,2] = 1
+      test[x,1]-test[x,3] = 2
+      ...
+
+  Exp expand error
+
+
+  TA expand Error
+    Solved and fixed indexing
+
+Parsing Error
+
+
+Comparison Error
+  How average error / RMSE is calculated
+  How classification is made
+  How R^2 is calculated
+
+  https://math.stackexchange.com/questions/1932532/converting-from-quadratic-to-second-order-cone-optimization-problem
+
+  

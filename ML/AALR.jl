@@ -20,11 +20,11 @@ path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCod
 #fileName = path*"/Results/IndexData/IndexData"
 #mainData = loadConcrete(path)
 #fileName = path*"/Results/Concrete/Run1/Concrete_Run"
-#mainData = loadHousingData(path)
+mainData = loadHousingData(path)
 #fileName = path*"/Results/HousingData/HousingData"
-mainData = loadCPUData(path)
+#mainData = loadCPUData(path)
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
-fileName = path*"/CPUData/Run4/CPUData"
+fileName = path*"/HousingData/Housing"
 
 #Reset HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
@@ -140,7 +140,7 @@ tau = 2
 
 stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30))
 SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-amountOfGammas = 5
+amountOfGammas = 2
 #Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
 gammaArray = log10.(logspace(0, log10.(SSTO), amountOfGammas))
 
@@ -738,11 +738,11 @@ bSample = []
 allCuts = []
 signifBoolean = zeros(3)
 
-stage2Model, HCPairCounter = buildStage2(standX,standY, kmax)
+stage2Model, HCPairCounter = buildStage2(standX,standY, 2)
 
 #Gurobi.writeproblem(stage2Model, "testproblem1.lp")
 
-best3Beta, solArr, stage2Model = solveAndLogForAllK(stage2Model, kmax)
+best3Beta, solArr, stage2Model = solveAndLogForAllK(stage2Model, 2)
 
 cuts = stageThree(best3Beta, standX, standY, allCuts)
 
@@ -772,7 +772,7 @@ while !isempty(cuts)
 	Gurobi.updatemodel!(stage2Model)
 	#Gurobi.writeproblem(stage2Model, "testproblem2.lp")
 	#println(stage2Model)
-	best3Beta, solArr = solveAndLogForAllK(stage2Model, kmax)
+	best3Beta, solArr = solveAndLogForAllK(stage2Model, 2)
 
 	#Stage 3
 	cuts = stageThree(best3Beta, standX, standY, allCuts)

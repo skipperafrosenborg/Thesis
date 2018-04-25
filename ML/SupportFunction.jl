@@ -4,6 +4,12 @@ Returns the maximum correlation form the selected variables
 """
 function findMaxCor(standX, bestSolution)
 	chosenVar = find(bestSolution)
+	for i = chosenVar
+		if bestSolution[i] < 1e-6 && bestSolution[i] > -1e-6
+			bestSolution[i] = 0
+		end
+	end
+	chosenVar = find(bestSolution)
 	return maximum(cor(standX[:,chosenVar])-Diagonal(cor(standX[:,chosenVar])))
 end
 
@@ -217,64 +223,31 @@ end
 Transforming X with time elements -3, -6 and -12
 """
 function expandWithTime3612(X)
-	println("Transforming with t-2, t-3, ..., t-12")
-	#println("Transforming with t-3, t-6 and t-12")
-	#the first row is -1 already, so it will be row +2, +5 and +11
+	println("Transforming with t-1, t-3, ..., t-12")
 	expandedX = copy(Array{Float64}(X))
 	xCols = size(expandedX)[2]
 	xRows = size(expandedX)[1]
 
-	for k=0:10
-		# -2:-12 time series
+
+	for k=1:12
+		# k = how many month we look back: -1:-12 time series
 		for i=1:xCols
+			# i loops over all columns in the X matrix
 			insertArray = []
-			for j=1:(xRows-(k+1))
-				push!(insertArray, expandedX[j+(k+1),i])
-			end
-			for j=(xRows-k):(xRows)
+
+			# j loops over rows in X matrix
+			for j=1:k
+				# adding 0-rows for the first k rows as we do not have any
+				# previous observations
 				push!(insertArray, 0)
+			end
+
+			for j=k+1:xRows
+				push!(insertArray, expandedX[j-k,i])
 			end
 			expandedX = hcat(expandedX, insertArray)
 		end
 	end
-
-	#=
-	# -3 time series
-	for i=1:xCols
-		insertArray = []
-		for j=1:(xRows-2)
-			push!(insertArray, expandedX[j+2,i])
-		end
-		for j=(xRows-1):(xRows)
-			push!(insertArray, 0)
-		end
-		expandedX = hcat(expandedX, insertArray)
-	end
-
-	# -6 time series
-	for i=1:xCols
-		insertArray = []
-		for j=1:(xRows-5)
-			push!(insertArray, expandedX[j+5,i])
-		end
-		for j=(xRows-4):(xRows)
-			push!(insertArray, 0)
-		end
-		expandedX = hcat(expandedX, insertArray)
-	end
-
-	# -12 time series
-	for i=1:xCols
-		insertArray = []
-		for j=1:(xRows-11)
-			push!(insertArray, expandedX[j+11,i])
-		end
-		for j=(xRows-10):(xRows)
-			push!(insertArray, 0)
-		end
-		expandedX = hcat(expandedX, insertArray)
-	end
-	=#
 
 	#Ensure we return a Float64 array
 	expandedX = copy(Array{Float64}(expandedX))
@@ -294,38 +267,38 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 
 	#s=2 would be the average of the last 2 observations
 	MAs2arr = []
-	for j=1:(xRows-2)
-		push!(MAs2arr, sum(Y[s] for s=(j+1):(j+2))/2)
-	end
-	for j=(xRows-1):(xRows)
+	for j=1:2
 		push!(MAs2arr,0)
+	end
+	for j=1:(xRows-2)
+		push!(MAs2arr, sum(Y[s] for s=(j):(j+1))/2)
 	end
 
 	#s=3 would be the average of the last 3 observations
 	MAs3arr = []
-	for j=1:(xRows-3)
-		push!(MAs3arr, sum(Y[s] for s=(j+1):(j+3))/3)
-	end
-	for j=(xRows-2):(xRows)
+	for j=1:3
 		push!(MAs3arr,0)
+	end
+	for j=1:(xRows-3)
+		push!(MAs3arr, sum(Y[s] for s=(j):(j+2))/3)
 	end
 
 	#l=9 would be the average of the last 9 observations
 	MAl9arr = []
-	for j=1:(xRows-9)
-		push!(MAl9arr, sum(Y[s] for s=(j+1):(j+9))/9)
-	end
-	for j=(xRows-8):(xRows)
+	for j=1:9
 		push!(MAl9arr,0)
+	end
+	for j=1:(xRows-9)
+		push!(MAl9arr, sum(Y[s] for s=(j):(j+8))/9)
 	end
 
 	#l=12 would be the average of the last 12 observations
 	MAl12arr = []
-	for j=1:(xRows-12)
-		push!(MAl12arr, sum(Y[s] for s=(j+1):(j+12))/12)
-	end
-	for j=(xRows-11):(xRows)
+	for j=1:12
 		push!(MAl12arr,0)
+	end
+	for j=1:(xRows-12)
+		push!(MAl12arr, sum(Y[s] for s=(j):(j+11))/12)
 	end
 
 	#Compare s=1 and l=9 and create a column of buy signals
@@ -333,38 +306,39 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 	#then l=12 vs. s=1,2,3
 	MAMatrix = zeros(xRows, 6)
 	#check s=1 and l=9
-	for j=1:xRows
-		if Y[j] >= MAl9arr[j]
+	for j=10:xRows
+		if Y[j-1] >= MAl9arr[j]
 			MAMatrix[j, 1] = 1
 		end
 	end
 	#check s=2 and l=9
-	for j=1:xRows
+	for j=10:xRows
 		if MAs2arr[j] >= MAl9arr[j]
 			MAMatrix[j, 2] = 1
 		end
 	end
 	#check s=3 and l=9
-	for j=1:xRows
+	for j=10:xRows
 		if MAs3arr[j] >= MAl9arr[j]
 			MAMatrix[j, 3] = 1
 		end
 	end
 
-	#check s=1 and l=9
-	for j=1:xRows
-		if Y[j] >= MAl12arr[j]
+	#check s=1 and l=12
+	for j=13:xRows
+		if Y[j-1] >= MAl12arr[j]
 			MAMatrix[j, 4] = 1
 		end
 	end
-	#check s=2 and l=9
-	for j=1:xRows
+
+	#check s=2 and l=12
+	for j=13:xRows
 		if MAs2arr[j] >= MAl12arr[j]
 			MAMatrix[j, 5] = 1
 		end
 	end
-	#check s=3 and l=9
-	for j=1:xRows
+	#check s=3 and l=12
+	for j=13:xRows
 		if MAs3arr[j] >= MAl12arr[j]
 			MAMatrix[j, 6] = 1
 		end
@@ -377,30 +351,30 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 	# If a stock is higher then it was m periods ago, it has MOMENTUM
 	# computing for m=9
 	Mom9arr = []
-	for j=1:(xRows-9)
-		if Y[j] > Y[j+9]
+	for j=1:10
+		push!(Mom9arr,0)
+	end
+	for j=11:xRows
+		if Y[j-1] > Y[j-10]
 			push!(Mom9arr, 1)
 		else
 			push!(Mom9arr, 0)
 		end
-	end
-	for j=(xRows-8):(xRows)
-		push!(Mom9arr,0)
 	end
 
 	expandedX = hcat(expandedX, Mom9arr)
 
 	# computing for m=12
 	Mom12arr = []
-	for j=1:(xRows-12)
-		if Y[j] > Y[j+12]
+	for j=1:13
+		push!(Mom12arr,0)
+	end
+	for j=14:xRows
+		if Y[j-1] > Y[j-13]
 			push!(Mom12arr, 1)
 		else
 			push!(Mom12arr, 0)
 		end
-	end
-	for j=(xRows-11):(xRows)
-		push!(Mom12arr,0)
 	end
 
 	expandedX = hcat(expandedX, Mom12arr)
@@ -409,7 +383,6 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 	expandedX = copy(Array{Float64}(expandedX))
 	return expandedX
 end
-
 
 """
 Function that returns all the column names including ^2, log(), sqrt()

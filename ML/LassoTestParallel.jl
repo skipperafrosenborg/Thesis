@@ -4,11 +4,11 @@ using DataFrames
 using CSV
 
 trainingSizeInput = parse(Int64, ARGS[1])
-trainingSizeInput = 240
+#trainingSizeInput = 240
 println(typeof(trainingSizeInput))
 
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 cd(path)
 @everywhere include("ParallelModelGeneration.jl")
 include("SupportFunction.jl")
@@ -30,24 +30,29 @@ trainingSize = 240
 
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
 	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
 
-
 	#= industry must be one of the following
+	NoDur
 	Durbl
+	Manuf
 	Enrgy
 	HiTec
-	Hlth
-	Manuf
-	NoDur
-	Other
-	Shops
 	Telcm
+	Shops
+	Hlth
 	Utils
+	Other
 	=#
-	industry = "NoDur"
+	industry = ARGS[2]
 	mainData = loadIndexDataLOGReturn(industry, path)
+	mainDataArr = Array(mainData[:,1:end-2])
+	checkArr=zeros(10,1)
+	for i=1:10
+		checkArr[i] = countnz(mainData[1:end-1,29]-mainData[2:end,i])
+	end
+	checkArr
 
 	path = "/zhome/9f/d/88706/SpecialeCode/"
 	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
@@ -124,7 +129,6 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	predictedArr = SharedArray{Float64}(testRuns, nGammas)
 	realArr = SharedArray{Float64}(testRuns, 1)
 	bSolvedArr = SharedArray{Float64}(testRuns, bCols)
-
 
 	xTrainInput = [allData[r:(trainingSize+r-1), 1:bCols] for r = 1:testRuns]
 	YtrainInput = [allData[r:(trainingSize+r-1), bCols+1] for r = 1:testRuns]

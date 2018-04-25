@@ -1,16 +1,17 @@
 using StatsBase
 using DataFrames
 using CSV
-using Bootstrap #External packages, must be added
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
+nRows = 1070
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/AALRTest/12-1/"
 cd(path)
-mainData = zeros(3, 1070, 1360)
 
-for i = 1:1070
+mainData = zeros(3, nRows, 1472)
+
+for i = 1:nRows
     f = open(string(i)*"AALRBestK.csv")
     readline(f)
     s = readline(f)
