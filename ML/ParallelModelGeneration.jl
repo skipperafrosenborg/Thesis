@@ -11,7 +11,7 @@ function generateLassoModel(Xtrain, Ytrain, gamma)
 			w
 	end
 	@objective(M,Min,0.5*w+gamma*ones(bCols)'*t)
-	@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w)
+	@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w) #second order cone constraint
 	@constraint(M,  b .<= t)
 	@constraint(M, -t .<= b)
 

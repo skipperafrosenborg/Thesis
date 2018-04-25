@@ -111,9 +111,63 @@ writedlm("MV100obsG10versus1N.csv", combinedPortfolios,",")
 
 writedlm("MV100obsPortfolioWeightsG10.csv", wMVtracker,",")
 
-function meanVariancePPDOptimization(fullX, startRow, endRow, errors, meanForecasts)
+function meanVariancePPDOptimization(fullX, startRow, endRow, gammaValue, meanForecasts)
+    mainXarr = fullX[startRow:endRow, 1:10]
+    w1N = repeat([0.1], outer = 10)
 
+    #creating the covariance matrix of the training data
+    Sigma = cov(mainXarr)
+
+    #using the PPD mean forecasts
+    Mu = meanForecasts
+
+    #setting risk aversion.
+    gamma = gammaValue
+
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+    @variables M begin
+            w[1:indexes]
+    end
+    @objective(M,Min, gamma*w'*Sigma*w-(Mu'*w)[1]) #efficient frontier
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+
+    solve(M)
+    wStar = getvalue(w)
+
+    #creating the forecastRow in arithmetic returns (not log returns)
+    #then we can multiply and sum across the row
+    forecastRow = exp(fullX[(endRow+1):(endRow+1),1:10])
+
+    periodReturn = Array(forecastRow*wStar)[1]
+    period1NReturn = Array(forecastRow*w1N)[1]
+
+    return periodReturn, period1NReturn, wStar
 end
+
+
+"""
+Keeps track of returns for both the proposed method and 1/N.
+Needs the overall array as well as the two next returns to push
+"""
+
+function trackPortfolioReturns(ReturnOverall, individualReturn, newPeriodReturn, Return1NOverall, Individual1NReturn, period1NReturn)
+    currentLength = length(ReturnOverall)
+    ReturnOverall = push!(ReturnOverall, ReturnOverall[currentLength]*newPeriodReturn)
+    individualReturn = push!(individualReturn, newPeriodReturn)
+
+    current1NLength = length(Return1NOverall)
+    Return1NOverall = push!(Return1NOverall, Return1NOverall[current1NLength]*period1NReturn)
+    Individual1NReturn = push!(Individual1NReturn, period1NReturn)
+end
+
+function trackPortfolioWeights(weights, periodWeights, iteration)
+    weights[iteration, 1:10] = periodWeights
+end
+
+
+
+
 
 """
 Utilizing LASSO to create a classification; 1, it goes up, 0, it goes down
