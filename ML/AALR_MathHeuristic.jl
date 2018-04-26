@@ -19,11 +19,11 @@ println("Leeeeroooy Jenkins")
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 #mainData = loadIndexDataNoDur(path)
 mainData = loadIndexDataNoDurLOGReturn(path)
-fileName = path*"/Results/IndexData/IndexData"
+path = "/zhome/9f/d/88706/SpecialeCode/Results/IndexData/SpeedTest/"
 
 #Reset HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-cd(path)
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
+#cd(path)
 dateAndReseccion = Array(mainData[:,end-1:end])
 mainDataArr = Array(mainData[:,1:end-2])
 
@@ -131,7 +131,7 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
 
             #println("Building model")
         	#Define parameters and model
-        	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 0));
+        	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 0, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40));
 
         	#Define variables
         	@variable(stage2Model, b[1:bCols], start = 0) #Beta values
@@ -304,7 +304,7 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
     HCPairCounter = 0
     #println("Building model")
     #Define parameters and model
-    stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 5, OutputFlag = 0, MIPFocus = 2));
+    stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 5, OutputFlag = 0, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40))
 
     #Define variables
     @variable(stage2Model, b[1:bCols], start = 0) #beta variables
@@ -713,9 +713,6 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     bestObjtivesMath = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     println("This was time for warmstart")
 
-
-
-
     return bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath
 end
 
@@ -727,9 +724,9 @@ bestObjtivesNormal = 1
 bestObjtivesWarmstart = 1
 bestObjtivesMath = 1
 
-writedlm(path*"/bestNorm.csv",bestObjtivesNormal)
-writedlm(path*"/bestWarm.csv",bestObjtivesWarmstart)
-writedlm(path*"/bestMath.csv",bestObjtivesMath)
+#writedlm(path*"/bestNorm.csv",bestObjtivesNormal)
+#writedlm(path*"/bestWarm.csv",bestObjtivesWarmstart)
+#writedlm(path*"/bestMath.csv",bestObjtivesMath)
 
 r=1
 for r = 1:100:501#(nRows-trainingSize-predictions)
@@ -741,73 +738,7 @@ for r = 1:100:501#(nRows-trainingSize-predictions)
 	standYVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
 	bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath  = AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
-    #for i=1:100
-    #    if r == floor((nRows-trainingSize-predictions)/100*i)
-    #        writedlm(fileName*"_solution.CSV",solArr,",")
-    #        writedlm(fileName*"_realArray.CSV",realArr,",")
-    #        writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
-    #        save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
-    #    end
-    #end
+    writedlm(path*string(r)*"bestNorm.csv",bestObjtivesNormal)
+    writedlm(path*string(r)*"bestWarm.csv",bestObjtivesWarmstart)
+    writedlm(path*string(r)*"bestMath.csv",bestObjtivesMath)
 end
-
-writedlm(path*"/bestNorm.csv",bestObjtivesNormal)
-writedlm(path*"/bestWarm.csv",bestObjtivesWarmstart)
-writedlm(path*"/bestMath.csv",bestObjtivesMath)
-
-#writedlm(fileName*"_solution.CSV",solArr,",")
-#writedlm(fileName*"_realArray.CSV",realArr,",")
-#writedlm(fileName*"_ISRSquared.CSV",ISRSquared,",")
-#save(fileName*"bSolMatrix.jld", "data", bSolMatrix)
-
-#=
-cuts = stageThree(best3Beta, standX, standY, allCuts)
-
-#cuts = stageThree(best3Beta[3,4:bCols+3], best3Beta[3,2], best3Beta[3,3],
-# 				  best3Beta[2,4:bCols+3], best3Beta[2,2], best3Beta[2,3],
-#				  best3Beta[1,4:bCols+3], best3Beta[1,2], best3Beta[1,3],
-#				  standX, standY, allCuts)
-#writedlm("betaOut.CSV", cuts,",")
-
-cutCounter = 0
-runCount = 1
-cutMatrix = []
-
-while !isempty(cuts)
-	#Function to add cuts to problem
-	#addCuts(stage2Model, cuts)
-	preCutCounter = copy(cutCounter)
-	allCuts = vcat(allCuts,cuts)
-	cutMatrix = cuts
-	cutRows = size(cutMatrix)[1]
-	cutCols = size(cutMatrix)[2]
-	cutCounter += cutRows
-	addCuts(stage2Model, cutMatrix, preCutCounter)
-
-
-	#Resolve problem
-	Gurobi.updatemodel!(stage2Model)
-	Gurobi.writeproblem(stage2Model, "testproblem2.lp")
-	#println(stage2Model)
-	best3Beta, solArr = solveAndLogForAllK(stage2Model, kmax)
-
-	#Stage 3
-	cuts = stageThree(best3Beta, standX, standY, allCuts)
-	println("Finished iteration $runCount")
-	runCount += 1
-	if runCount == 4
-		break
-	end
-end
-
-best3Beta
-
-f = open(fileName*"AALRBestK.csv", "w")
-write(f, "Rsquared,k,gamma,"*expandedColNamesToString(colNames)*"\n")
-writecsv(f,best3Beta)
-close(f)
-#println(getRMSE(standXTest, standYTest, best3Beta[1,4:111]))
-#println(getRMSE(standXTest, standYTest, best3Beta[2,4:111]))
-#println(getRMSE(standXTest, standYTest, best3Beta[3,4:111]))
-Gurobi.writeproblem(stage2Model, "testproblem3.lp")
-=#

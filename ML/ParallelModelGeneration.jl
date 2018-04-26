@@ -67,9 +67,7 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 	YpredValue = Ypred[1]
 	Yestimate = Xpred'*bSolved
 	YestimateValue = Yestimate[1]
-	if YpredValue >= 0 && YestimateValue >= 0
-		Indicator = 1
-	elseif YpredValue < 0 && YestimateValue < 0
+	if YestimateValue > 0
 		Indicator = 1
 	else
 		Indicator = 0

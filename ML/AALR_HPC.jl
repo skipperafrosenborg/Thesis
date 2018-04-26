@@ -12,18 +12,18 @@ println("Leeeeroooy Jenkins")
 
 #Skipper's path
 inputArg=0
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
 #HPC path
 #inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
-#mainData = loadCPUData(path)
-mainData = loadConcrete(path)
+mainData = loadCPUData(path)
+#mainData = loadConcrete(path)
 #mainData = loadHousingData(path)
 mainDataArr = Array{Float64}(mainData)
 #mainData = loadIndexDataNoDurLOGReturn(path)
 
-dataFile="Concrete"
+dataFile="CPU"
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
 path = "/zhome/9f/d/88706/SpecialeCode/Results"
