@@ -360,6 +360,7 @@ names(data)[1] = "YM"
 #Import predictors
 PredData = read.csv("PredictorData2016.csv", header =T, sep = ";")
 predCols = ncol(PredData)
+predRows = nrow(PredData)
 names(PredData)[1] = "YM"
 YM = PredData$YM
 PredData$Month = substr(PredData$YM, 5,6)
@@ -370,6 +371,22 @@ for(i in 1:predCols){
   PredData[list,i] = 0
   list = NULL
 }
+PredData$IndexDiff = 0
+for(i in 2:predRows){
+  PredData$IndexDiff[i] = PredData$Index[i]/PredData$Index[i-1]
+}
+PredData$D12Diff = 0
+for(i in 2:predRows){
+  PredData$D12Diff[i] = PredData$D12[i]/PredData$D12[i-1]
+}
+
+PredData$E12Diff = 0
+for(i in 2:predRows){
+  PredData$E12Diff[i] = PredData$E12[i]/PredData$E12[i-1]
+}
+predCols2 = ncol(PredData)
+
+PredData = PredData[,c(1,21,22,23, 5:20)]
 
 MatchList = match(PredData$YM, data$YM)
 startRow = which(MatchList %in% 1)
@@ -417,9 +434,9 @@ for(i in 1:dataCols){
 }
 
 #Shift data
-outputY = originalData[2:(outputRows), 10]
+outputY = originalData[2:(outputRows), 1]
 outputX = originalData[1:(outputRows-1),]
 
 predictionTime = data$YM[2:outputRows] #dates are the date of the Y variable, so we predict january '12, but have december '11 info available
 outputData = cbind(outputX, PredDataOutput, VIX, outputY, predictionTime, RecessionData$Recession)
-write.table(outputData, file = "monthlyOtherLOGReturn.csv", col.names = FALSE, row.names = F, sep = ",")
+write.table(outputData, file = "monthlyNoDurLOGReturn2.csv", col.names = FALSE, row.names = F, sep = ",")
