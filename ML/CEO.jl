@@ -37,7 +37,7 @@ XArrays, YArrays = generateXandYs(industries, modelMatrix)
 nGammas = 5
 standY = YArrays[1]
 SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
-lambdaValues = log.(logspace(0, SSTO/2, nGammas))
+lambdaValues = log.(logspace(100, SSTO/2, nGammas))
 nRows = size(standY)[1]
 amountOfModels = nGammas^4
 
@@ -54,21 +54,135 @@ for l1 = 1:nGammas
         end
     end
 end
-
-modelConfig[1,:] = [lambdaValues[3] lambdaValues[3] lambdaValues[3] lambdaValues[3]]
+modelConfig
 
 #Initialization of parameters
 w1N = repeat([0.1], outer = 10) #1/N weights
 gamma = 10 #risk aversion
-validationPeriod = 120
+validationPeriod = 5
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
 return1NMatrix = zeros(nRows-trainingSize, amountOfModels)
 returnCEOMatrix = zeros(nRows-trainingSize, amountOfModels)
-returnPerfectMatrix = zeros(nRows-trainingSize, amountOfModels)
+returnPerfectMatrix = zeros(nRows-trainingSize)
+
+bestModelAmount = 5
+bestModelConfigs = zeros(bestModelAmount, 4)
+bestModelIndexes = zeros(bestModelAmount)
+
+weightsPerfect = zeros(nRows-trainingSize, 10)
+weightsCEO     = zeros(nRows-trainingSize, 10)
+
+#Establishing perfect results in order to avoid doing same mean-variance calculation over and over
+for t=1:(nRows-trainingSize-2)
+    trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
+    valY = zeros(10)
+    for i = 1:10
+        valY[i] = validationY[i][1]
+    end
+    weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, OOSRow[1][1:10], valY, gamma)
+end
 
 println("Starting CEO Validation loop")
-for t=1:200 #1:(nRows-trainingSize-2-validationPeriod) #added -validationPeriod, without it will run to the end of data set
-    println("Time $t/100")
+for t=1:50# (nRows-trainingSize-2)
+    println("Time $t/50")
+    trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
+
+    if t <= validationPeriod
+        for m = 1:amountOfModels
+            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma))
+            expectedReturns = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
+
+            #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
+            valY = zeros(10)
+            for i = 1:10
+                valY[i] = validationY[i][1]
+            end
+            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            weightsCEO[t, 1:10]     = wStar
+            return1NMatrix[t, m]      = return1N
+            returnCEOMatrix[t, m]     = returnCEO
+            returnPerfect = returnPerfectMatrix[t]
+            println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
+            PMatrix[t, m] = calculatePvalue(return1N, returnPerfect, returnCEO)
+            #trackReturn(returnCEOTotal, returnCEO)
+        end
+    elseif t == (validationPeriod+1)
+        modelMeans = mean(PMatrix, 1)
+        for i = 1:bestModelAmount
+            bestModelIndex = indmax(modelMeans)
+            bestModelConfig[i] = modelConfig[bestModelIndex, :]
+            bestModelIndexes[i] = bestModelIndex
+            #place 0 at index place now and take new max as "next best model"
+            modelMeans[bestModelIndex] = 0
+        end
+
+        for m = 1:bestModelAmount
+            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, bestModelConfigs[m, :]))
+            expectedReturns = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
+
+            #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
+            valY = zeros(10)
+            for i = 1:10
+                valY[i] = validationY[i][1]
+            end
+            return1N, returnPerfect, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            weightsCEO[t, 1:10]     = wStar
+            return1NMatrix[t, bestModelIndexes[m]]      = return1N
+            returnCEOMatrix[t, bestModelIndexes[m]]     = returnCEO
+            returnPerfect = returnPerfectMatrix[t]
+            println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
+            PMatrix[t, bestModelIndexes[m]] = calculatePvalue(return1N, returnPerfect, returnCEO)
+        end
+    else
+        for m = 1:bestModelAmount
+            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, bestModelConfigs[m, :]))
+            expectedReturns = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
+
+            #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
+            valY = zeros(10)
+            for i = 1:10
+                valY[i] = validationY[i][1]
+            end
+            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            weightsCEO[t, 1:10]     = wStar
+            return1NMatrix[t, bestModelIndexes[m]]      = return1N
+            returnCEOMatrix[t, bestModelIndexes[m]]     = returnCEO
+            returnPerfect = returnPerfectMatrix[t]
+            println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
+            PMatrix[t, bestModelIndexes[m]] = calculatePvalue(return1N, returnPerfect, returnCEO)
+        end
+
+    end
+
+end
+Array(return1NMatrix[1:200, 1])
+returnPerfectMatrix[1:200, 1]
+returnCEOMatrix[1:200, 1]
+combinedPortfolios = hcat(returnPerfectMatrix[1:200, 1], return1NMatrix[1:200, 1], returnCEOMatrix[1:200, 1], PMatrix[1:200, 1])
+writedlm("returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function createDataSplits(XArrays, YArrays, t, trainingSize)
     trainingXArrays = Array{Array{Float64, 2}}(industriesTotal)
     trainingYArrays = Array{Array{Float64, 2}}(industriesTotal)
 
@@ -93,36 +207,42 @@ for t=1:200 #1:(nRows-trainingSize-2-validationPeriod) #added -validationPeriod,
         OOSRow[i]          = XArrays[i][(t+trainingSize+1):(t+trainingSize+1), :]
         OOSY[i]            = YArrays[i][(t+trainingSize+1):(t+trainingSize+1), :]
     end
-
-    for m = 1:1#amountOfModels
-        betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :]))
-        expectedReturns = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
-
-        #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]#Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
-        valY = zeros(10)
-        for i = 1:10
-            valY[i] = validationY[i][1]
-        end
-        return1N, returnPerfect, returnCEO = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
-        return1NMatrix[t, m]      = return1N
-        returnPerfectMatrix[t, m] = returnPerfect
-        returnCEOMatrix[t, m]     = returnCEO
-        println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
-        PMatrix[t, m] = calculatePvalue(return1N, returnPerfect, returnCEO)
-        #trackReturn(returnCEOTotal, returnCEO)
-    end
+    return trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY
 end
-Array(return1NMatrix[1:200, 1])
-returnPerfectMatrix[1:200, 1]
-returnCEOMatrix[1:200, 1]
-combinedPortfolios = hcat(returnPerfectMatrix[1:200, 1], return1NMatrix[1:200, 1], returnCEOMatrix[1:200, 1], PMatrix[1:200, 1])
-writedlm("returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
+
 
 function calculatePvalue(return1N, returnPerfect, returnCEO)
     PValue = 1 - (returnCEO-returnPerfect)/(return1N-returnPerfect)
     return PValue
 end
 
+function findPerfectResults(trainingXArrays, Xrow, Yvalues, gamma)
+    indexes = 10
+    Sigma =  cov(trainingXArrays[1][:,1:10])
+
+    #A=U^(T)U where U is upper triangular with real positive diagonal entries
+    F = lufact(Sigma)
+    U = F[:U]  #Cholesky factorization of Sigma
+
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+    @variables M begin
+            w[1:indexes]
+            u[1:indexes]
+            z
+            y
+    end
+
+    @objective(M,Min, gamma*y - Yvalues'*w)
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
+    solve(M)
+    wPerfect = getvalue(w)
+    forecastRow = (exp10(Xrow')-1)*100
+    periodPerfectReturn = forecastRow*wPerfect
+
+    return wPerfect, periodPerfectReturn
+end
 
 function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     indexes = 10
@@ -147,6 +267,7 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     period1NReturn = forecastRow*w1N
 
     #perfect information
+    #=
     M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
     @variables M begin
             w[1:indexes]
@@ -163,8 +284,8 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     wPerfect = getvalue(w)
 
     periodPerfectReturn = forecastRow*wPerfect
-
-    return period1NReturn, periodPerfectReturn, periodReturn, wStar, wPerfect
+    =#
+    return period1NReturn, periodReturn, wStar
 end
 
 
@@ -192,7 +313,7 @@ end
 
 
 
-function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
+function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
     industriesTotal = 10
     periodMean = zeros(10)
     for i = 1:10
@@ -201,7 +322,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
     l1, l2, l3, l4 = modelConfigRow
     env = Gurobi.Env()
 
-    maxPredictors = 1304
+    maxPredictors = 1412
     bCols = floor(Int,zeros(industriesTotal))
     Sigma =  cov(trainingXArrays[1][:,1:10])
 
@@ -212,7 +333,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
     for i = 1:industriesTotal
         bCols[i] = size(trainingXArrays[i])[2]
     end
-    gamma = 10
+    gamma = gamma
     bRows = size(trainingXArrays[1])[1]
     M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
 
@@ -227,7 +348,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
 
     #@objective(M,Min,sum(0.5*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-f[:,t]'*w[:,t] for t=1:bRows)) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
 
-    @objective(M,Min,sum(0.5*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-sum(f[i,t] for i=1:10) for t=1:bRows)) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
+    @objective(M,Min,sum(l1*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-sum(f[i,t] for i=1:10) for t=1:bRows)) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
 
     for i = 1:industriesTotal
         for t = 1:bRows
@@ -259,7 +380,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow)
     @time(solve(M))
     betaArray = getvalue(b)
     #Insert shrinking here
-    return getvalue(b), U
+    return betaArray, U
 end
 
 
