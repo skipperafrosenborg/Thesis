@@ -3,12 +3,12 @@ using StatsBase
 using DataFrames
 using CSV
 
-trainingSizeInput = parse(Int64, ARGS[1])
-#trainingSizeInput = 240
+#trainingSizeInput = parse(Int64, ARGS[1])
+trainingSizeInput = 12
 println(typeof(trainingSizeInput))
 
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 cd(path)
 @everywhere include("ParallelModelGeneration.jl")
 include("SupportFunction.jl")
@@ -20,18 +20,18 @@ println("Leeeeroooy Jenkins")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #=
-VIX = 0
-raw = 1
-expTrans = 0
-timeTrans = 0
-TA = 0
+VIX = 1
+raw = 0
+expTrans = 1
+timeTrans = 1
+TA = 1
 trainingSize = 240
 =#
 
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
-	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
+	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
 
 	#= industry must be one of the following
 	NoDur
@@ -45,27 +45,36 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	Utils
 	Other
 	=#
-	industry = ARGS[2]
+	#industry = ARGS[2]
+	industry = "NoDur"
 	mainData = loadIndexDataLOGReturn(industry, path)
 	mainDataArr = Array(mainData[:,1:end-2])
-	checkArr=zeros(10,1)
-	for i=1:10
-		checkArr[i] = countnz(mainData[1:end-1,29]-mainData[2:end,i])
-	end
-	checkArr
 
-	path = "/zhome/9f/d/88706/SpecialeCode/"
-	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
+	#path = "/zhome/9f/d/88706/SpecialeCode/"
+	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
 	dateAndReseccion = Array(mainData[:,end-1:end])
 	mainDataArr = Array(mainData[:,1:end-2])
 
 	colNames = names(mainData)
+	if VIX == 1
+		if timeTrans == 1
+			featureNames = expandColNamesTimeToString(colNames[1:end-3])
+		else
+			featureNames = colNames[1:end-3]
+		end
+	else
+		if timeTrans == 1
+			featureNames = expandColNamesTimeToString(colNames[1:end-4])
+		else
+			featureNames = colNames[1:end-4]
+		end
+	end
+	s = split(expandedColNamesToString(featureNames,expTrans, TA),",")
+	s = Array{String}(s)
 
 	nRows = size(mainDataArr)[1]
 	nCols = size(mainDataArr)[2]
 
-	#fileName = path*"/Results/IndexData/LassoTests/240-1/2401_Shrink_"
-	#fileName = path*"/Results/Test/Parallel/"
 	fileName = path*"Results/IndexData/LassoTest/"*industry*"/"*string(trainingSize)*"-1/"*string(trainingSize)*"_"
 
 	#Reset HPC path
@@ -81,9 +90,9 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	else
 		if VIX == 1
 			fileName = fileName*"VIX_Macro"
-			mainXarr = mainXarr[:,1:end-1]
 		else
 			fileName = fileName*"Macro"
+			mainXarr = mainXarr[:,1:end-1]
 		end
 	end
 
@@ -105,7 +114,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	end
 
 	# Standardize
-	standX = mainXarr#zScoreByColumn(mainXarr)
+	standX = zScoreByColumn(mainXarr)
 	standY = mainYarr
 	SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 
@@ -125,30 +134,53 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 
 	ISR = SharedArray{Float64}(testRuns, nGammas)
 	Indi = SharedArray{Float64}(testRuns, nGammas)
-	gammaArray = log.(logspace(0, SSTO/2, nGammas))
+	#gammaArray = log.(logspace(0, SSTO/2, nGammas))
 	predictedArr = SharedArray{Float64}(testRuns, nGammas)
 	realArr = SharedArray{Float64}(testRuns, 1)
 	bSolvedArr = SharedArray{Float64}(testRuns, bCols)
+	bSolMatrix = SharedArray{Float64}(testRuns, bCols, nGammas)
 
 	xTrainInput = [allData[r:(trainingSize+r-1), 1:bCols] for r = 1:testRuns]
 	YtrainInput = [allData[r:(trainingSize+r-1), bCols+1] for r = 1:testRuns]
 	XpredInput  = [allData[(trainingSize+r+1-1), 1:bCols] for r = 1:testRuns]
 	YpredInput  = [allData[(trainingSize+r+1-1), bCols+1] for r = 1:testRuns]
 
-	for i in 1:nGammas
-		gammaInput = [gammaArray[i] for r = 1:testRuns]
+	SSTO = zeros(testRuns)
+
+	gammaArray = zeros(testRuns,nGammas)
+	for r = 1:testRuns
+		#tempStandY = YtrainInput[r]
+		#SSTO[r] = sum((tempStandY[i]-mean(tempStandY[:]))^2 for i=1:length(tempStandY))
+		maxVal = findmax((xTrainInput[r]'*YtrainInput[r]))[1]/240
+		gammaArray[r,:] = Array(linspace(0,maxVal,nGammas))
+ 	end
+
+	for i=1 #in 1:nGammas
+		#gammaInput = [gammaArray[r,i] for r = 1:testRuns]
+		gammaInput = gammaArray[:,i]
 
 		#Loop over gamma
 		results = pmap(generatSolveAndProcess, xTrainInput, YtrainInput, XpredInput, YpredInput, gammaInput)
-
+		results
 		for j in 1:testRuns
 			ISR[j,i] = results[j][1]
 			Indi[j,i] = results[j][2]
 			predictedArr[j,i] = results[j][3]
 			realArr[j,1] = YpredInput[j][1]
+			bSolMatrix[j,:,i] = results[j][4]
 		end
 	end
 
+	rmseTemp = 0
+	for i = 1:testRuns
+		rmseTemp += (realArr[i]-predictedArr[i,10])^2
+	end
+	sqrt(rmseTemp/testRuns)
+
+
+	writedlm(fileName*".csv",bSolMatrix[:,:,7],",")
+
+	#save(fileName*"bSolMatrix"*string(trainingSizeInput)*".jld", "data", bSolMatrix)
 
 	dateAndReseccionOutput = dateAndReseccion[trainingSize+1:trainingSize+testRuns,:]
 	toInput = Array{String}(1,2)

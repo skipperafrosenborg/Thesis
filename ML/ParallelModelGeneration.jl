@@ -4,14 +4,14 @@ env = Gurobi.Env()
 
 function generateLassoModel(Xtrain, Ytrain, gamma)
 	bCols = size(Xtrain)[2]
-	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=(nprocs()-1)))
+	M = JuMP.Model(solver = GurobiSolver(env, OutputFlag = 0, Threads=1))
 	@variables M begin
 			b[1:bCols]
 			t[1:bCols]
 			w
 	end
-	@objective(M,Min,0.5*w+gamma*ones(bCols)'*t)
-	@constraint(M, soc, norm( [1-w;2*(Xtrain*b-Ytrain)] ) <= 1+w) #second order cone constraint
+	@objective(M,Min,w+gamma*ones(bCols)'*t)
+	@constraint(M, soc, norm( [1-w; sqrt(2)*(Xtrain*b-Ytrain)] ) <= 1+w) #second order cone constraint
 	@constraint(M,  b .<= t)
 	@constraint(M, -t .<= b)
 
@@ -73,13 +73,13 @@ function processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 		Indicator = 0
 	end
 
-	return ISRsquared, Indicator, YestimateValue#, bSolved
+	return ISRsquared, Indicator, YestimateValue, bSolved
 end
 
 function generatSolveAndProcess(Xtrain, Ytrain, Xpred, Ypred, gamma)
 	bSolved = generateLassoModel(Xtrain, Ytrain, gamma)
 
-	ISRsquared, Indicator, YestimateValue = processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
+	ISRsquared, Indicator, YestimateValue, bSolved = processOutput(Xtrain, Ytrain, Xpred, Ypred, bSolved)
 
-	return ISRsquared, Indicator, YestimateValue#, bSolved
+	return ISRsquared, Indicator, YestimateValue, bSolved
 end

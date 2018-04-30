@@ -6,9 +6,14 @@ println("Leeeeroooy Jenkins")
 
 industry = "Utils"
 folder = "12"
-for i = [12, 24, 36, 48, 120, 240]
-    folder = string(i)
-    writeFile()
+industryArr = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
+for industry = industryArr
+    for i = [12, 24, 36, 48, 120, 240]
+        path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
+        folder = string(i)
+        writeFile()
+    end
 end
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
@@ -126,18 +131,18 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
     classIndex = findmax(classificationRate)[2]
     OOSR = findmax(Rsquare)[1]
     OOSRIndex = findmax(Rsquare)[2]
-    meanErrVal = findmax(meanErr)[1]
-    meanErrIndex = findmax(meanErr)[2]
-    RMSEVal = findmax(RMSE)[1]
-    RMSEIndex = findmax(RMSE)[2]
+    meanErrVal = findmin(meanErr)[1]
+    meanErrIndex = findmin(meanErr)[2]
+    RMSEVal = findmin(RMSE)[1]
+    RMSEIndex = findmin(RMSE)[2]
     tempArr[1,1] = findmax(classificationRate)[1]
     tempArr[1,2] = findmax(Rsquare)[1]
-    tempArr[1,3] = findmax(meanErr)[1]
-    tempArr[1,4] = findmax(RMSE)[1]
+    tempArr[1,3] = findmin(meanErr)[1]
+    tempArr[1,4] = findmin(RMSE)[1]
     tempArr[1,5] = findmax(classificationRate)[2]
     tempArr[1,6] = findmax(Rsquare)[2]
-    tempArr[1,7] = findmax(meanErr)[2]
-    tempArr[1,8] = findmax(RMSE)[2]
+    tempArr[1,7] = findmin(meanErr)[2]
+    tempArr[1,8] = findmin(RMSE)[2]
     #println("Classification: ",findmax(classificationRate))
     #println("OoS R²: ",findmax(Rsquare))
     #println("Mean Absolute Error: ",findmin(meanErr))
