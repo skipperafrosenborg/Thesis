@@ -25,12 +25,12 @@ raw = 0
 expTrans = 1
 timeTrans = 1
 TA = 1
-trainingSize = 240
+trainingSize = 48
 =#
 
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#Skipper's path
-	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+	path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
 
 	#= industry must be one of the following
@@ -116,9 +116,9 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	# Standardize
 	standX = zScoreByColumn(mainXarr)
 	standY = mainYarr
-	SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
+	#SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 
-	allData = hcat(mainXarr, mainYarr)
+	allData = hcat(standX, standY)
 	#allData = hcat(standX, standY)
 	bCols = size(standX)[2]
 	nRows = size(standX)[1]
@@ -145,18 +145,13 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	XpredInput  = [allData[(trainingSize+r+1-1), 1:bCols] for r = 1:testRuns]
 	YpredInput  = [allData[(trainingSize+r+1-1), bCols+1] for r = 1:testRuns]
 
-	SSTO = zeros(testRuns)
-
 	gammaArray = zeros(testRuns,nGammas)
 	for r = 1:testRuns
-		#tempStandY = YtrainInput[r]
-		#SSTO[r] = sum((tempStandY[i]-mean(tempStandY[:]))^2 for i=1:length(tempStandY))
-		maxVal = findmax((xTrainInput[r]'*YtrainInput[r]))[1]/240
+		maxVal = findmax(abs.(xTrainInput[r]'*YtrainInput[r]))[1]
 		gammaArray[r,:] = Array(linspace(0,maxVal,nGammas))
  	end
 
 	for i=1 #in 1:nGammas
-		#gammaInput = [gammaArray[r,i] for r = 1:testRuns]
 		gammaInput = gammaArray[:,i]
 
 		#Loop over gamma
@@ -170,6 +165,16 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 			bSolMatrix[j,:,i] = results[j][4]
 		end
 	end
+
+	avgK = 0
+	for i=1:testRuns
+		temp = countnz(bSolMatrix[i,:,10])
+		avgK += temp
+		if temp > 0
+			println("In row ",i," there are ",temp," active variables")
+		end
+	end
+	avgK = avgK/testRuns
 
 	rmseTemp = 0
 	for i = 1:testRuns

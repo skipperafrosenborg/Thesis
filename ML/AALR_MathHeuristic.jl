@@ -304,7 +304,7 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
     HCPairCounter = 0
     #println("Building model")
     #Define parameters and model
-    stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 5, OutputFlag = 0, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40))
+    stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 5, OutputFlag = 0, Threads = 2, PreMIQCPForm=0, MIPFocus=1))
 
     #Define variables
     @variable(stage2Model, b[1:bCols], start = 0) #beta variables

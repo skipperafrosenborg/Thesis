@@ -11,16 +11,16 @@ println("Leeeeroooy Jenkins")
 
 #Skipper's path
 #inputArg=106
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 
 #HPC path
 #inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/"
-industry = "Durbl"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+industry = "NoDur"
 mainData = loadIndexDataLOGReturn(industry, path)
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
 
-#path = "/zhome/9f/d/88706/SpecialeCode/Results"
+path = "/zhome/9f/d/88706/SpecialeCode/Results"
 #### MUST CHANGE ####
 fileName = path*"/IndexData/AALRTest/"
 
@@ -48,7 +48,7 @@ mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
 
 # Standardize
 standX = zScoreByColumn(mainXarr)
-standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
+standY = mainDataArr[:, nCols:nCols]
 allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
@@ -218,7 +218,7 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 	HCPairCounter = 0
 
 	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 40, OutputFlag = 0, Threads = nprocs()-1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
+	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 40, OutputFlag = 1, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
 
 	#Define variables
 	@variable(stage2Model, b[1:bCols]) #Beta values
@@ -237,7 +237,7 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 
 	#Define objective function (5a)
 	@objective(stage2Model, Min, T+G)
-	@constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
+	@constraint(stage2Model, soc, norm( [1-T;sqrt(2)*(standX*b-standY)] ) <= 1+T)
 	@constraint(stage2Model, gammaConstr, gamma*ones(bCols)'*v <= G) #4bCols
 
 	#Define constraints (5c)
@@ -346,10 +346,14 @@ for r = 1+inputArg*10:10+inputArg*10#(nRows-trainingSize-predictions)
 	nRows = size(standX)[1]
 
 	SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-	amountOfGammas = 3
+	amountOfGammas = 5
+
+	gammaArray = zeros(amountOfGammas)
+	maxVal = findmax(abs.(standX'*standY))[1]
+	gammaArray = Array(linspace(maxVal,0,amountOfGammas))
 
 	#Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
-	gammaArray = log10.(logspace(SSTO/2, 0, amountOfGammas))
+	#gammaArray = log10.(logspace(SSTO/2, 0, amountOfGammas))
 
 	#INITIALISE STORING ARRAYS
 	bSample = []

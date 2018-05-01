@@ -30,9 +30,20 @@ function loadIndexDataNoDurLOGReturn(path)
     return mainData
 end
 
+#=  For index data where index is absolute value and not diff
 function loadIndexDataLOGReturn(industry, path)
     cd(path)
     mainData = CSV.read("monthly"*industry*"LOGReturn.csv", header=["NoDur","Durbl",
+        "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
+        "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
+        "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","VIX","Ycol","Date","Resession"],
+        delim = ',', nullable=false, types=Dict(25=>Float64, 28=>Float64))
+    return mainData
+end
+=#
+function loadIndexDataLOGReturn(industry, path)
+    cd(path)
+    mainData = CSV.read("monthly"*industry*"LOGReturn2.csv", header=["NoDur","Durbl",
         "Manuf","Enrgy","HiTec","Telcm","Shops", "Hlth","Utils","Other","Index",
         "D12","E12","b.m","tbl","AAA","BAA","lty","ntis","Rfree","infl","ltr",
         "corpr","svar","csp","CRSP_SPvw","CRSP_SPvwx","VIX","Ycol","Date","Resession"],

@@ -16,7 +16,7 @@ for a = 1:6
         industry = industryArr[b]
         localBestClassRate = zeros(1,10)
         path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"
-        path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+        #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
         cd(path)
         prediction = CSV.read(string(folder)*"-1/"*string(folder)*"_VIX_MacroTimeExpTA_Predicted.CSV", delim = ',', nullable=false)
         real = CSV.read(string(folder)*"-1/"*string(folder)*"_VIX_MacroTimeExpTA_real.CSV", delim = ',', nullable=false)
@@ -51,12 +51,13 @@ function logMaxes(industry, folder)
     cd(path)
     indicators = CSV.read(string(folder)*"_"*ModelName*"_Indi.CSV", delim = ',', nullable=false)
     indicatorArray = indicators[:,3+bestGamma]
-    bestGamma = string(names(indicators)[3+bestGamma])
+    #=bestGamma = string(names(indicators)[3+bestGamma])
     if bestGamma == "0_1"
         bestGamma = 0
     else
         bestGamma = parse(Float64, bestGamma)
     end
+    =#
     return bestGamma, classificationRate, ModelName, indicatorArray
 end
 

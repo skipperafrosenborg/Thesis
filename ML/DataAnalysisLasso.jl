@@ -1,20 +1,25 @@
 using StatsBase
 using DataFrames
 using CSV
+using JLD
 include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
 
-industry = "Utils"
+industry = "NoDur"
 folder = "12"
 industryArr = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 for industry = industryArr
     for i = [12, 24, 36, 48, 120, 240]
+        println("Industry ",industry," time period ",i)
         path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
         folder = string(i)
         writeFile()
     end
 end
+
+#cd(path)
+#test = load("12_Raw_bSolMatrix12.jld")["data"]
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
