@@ -254,6 +254,8 @@ function expandWithTime3612(X)
 	return expandedX
 end
 
+
+
 """
 Transforming X with moving average and momentum signals
 """
@@ -384,25 +386,52 @@ function expandWithMAandMomentum(X, Y, originalColumns)
 	return expandedX
 end
 
+function expandColNamesTimeToString(featureNames)
+	loopLength = length(featureNames)
+
+	for j = 1:12
+		for i=1:loopLength
+			#println(Symbol(string(featureNames[i])*" t-"*string(j)))
+			featureNames = vcat(featureNames, Symbol(string(featureNames[i])*" t-"*string(j)))
+		end
+	end
+
+	return featureNames
+end
+
 """
 Function that returns all the column names including ^2, log(), sqrt()
 """
-function expandedColNamesToString(colNames)
+function expandedColNamesToString(colNames, ExpTrans, TA)
 	masterString = ""
-	for i=1:length(colNames)-1
-		masterString = masterString*string(colNames[i])*","
+
+	if ExpTrans == 1
+		for i=1:length(colNames)
+			masterString = masterString*string(colNames[i])*","
+		end
+
+		for i=1:length(colNames)
+			masterString = masterString*string(colNames[i])*"^2,"
+		end
+
+		for i=1:length(colNames)
+			masterString = masterString*"ln("*string(colNames[i])*"),"
+		end
+
+		for i=1:length(colNames)
+			masterString = masterString*"sqrt("*string(colNames[i])*"),"
+		end
 	end
 
-	for i=1:length(colNames)-1
-		masterString = masterString*string(colNames[i])*"^2,"
-	end
-
-	for i=1:length(colNames)-1
-		masterString = masterString*"ln("*string(colNames[i])*"),"
-	end
-
-	for i=1:length(colNames)-1
-		masterString = masterString*"sqrt("*string(colNames[i])*"),"
+	if TA == 1
+		masterString = masterString * "MA 1-9,"
+		masterString = masterString * "MA 2-9,"
+		masterString = masterString * "MA 3-9,"
+		masterString = masterString * "MA 1-12,"
+		masterString = masterString * "MA 2-12,"
+		masterString = masterString * "MA 3-12,"
+		masterString = masterString * "Mo 9,"
+		masterString = masterString * "MA 12"
 	end
 
 	return masterString

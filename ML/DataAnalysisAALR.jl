@@ -78,12 +78,12 @@ for i = 1:3
     # Process data
     tempArr[i,1] = findmax(classificationRate)[1]
     tempArr[i,2] = findmax(Rsquare)[1]
-    tempArr[i,3] = findmax(meanErr)[1]
-    tempArr[i,4] = findmax(RMSE)[1]
+    tempArr[i,3] = findmin(meanErr)[1]
+    tempArr[i,4] = findmin(RMSE)[1]
     tempArr[i,5] = findmax(classificationRate)[2]
     tempArr[i,6] = findmax(Rsquare)[2]
-    tempArr[i,7] = findmax(meanErr)[2]
-    tempArr[i,8] = findmax(RMSE)[2]
+    tempArr[i,7] = findmin(meanErr)[2]
+    tempArr[i,8] = findmin(RMSE)[2]
 end
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/AALRTest/Summary "*string(timeSpan)
