@@ -25,7 +25,7 @@ noDurModel = [1 0 1 1 1]
 testModel = [0 1 0 0 0]
 modelMatrix[1, :] = noDurModel
 for i=2:industriesTotal
-    modelMatrix[i, :] = testModel
+    modelMatrix[i, :] = noDurModel
 end
 
 
@@ -79,7 +79,7 @@ for t=1:(nRows-trainingSize-2)
     for i = 1:10
         valY[i] = validationY[i][1]
     end
-    weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, OOSRow[1][1:10], valY, gamma)
+    weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gamma)
 end
 
 println("Starting CEO Validation loop")
@@ -97,7 +97,8 @@ for t=1:50# (nRows-trainingSize-2)
             for i = 1:10
                 valY[i] = validationY[i][1]
             end
-            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            #return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:10]     = wStar
             return1NMatrix[t, m]      = return1N
             returnCEOMatrix[t, m]     = returnCEO
@@ -125,7 +126,7 @@ for t=1:50# (nRows-trainingSize-2)
             for i = 1:10
                 valY[i] = validationY[i][1]
             end
-            return1N, returnPerfect, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            return1N, returnPerfect, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:10]     = wStar
             return1NMatrix[t, bestModelIndexes[m]]      = return1N
             returnCEOMatrix[t, bestModelIndexes[m]]     = returnCEO
@@ -143,7 +144,7 @@ for t=1:50# (nRows-trainingSize-2)
             for i = 1:10
                 valY[i] = validationY[i][1]
             end
-            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:10]     = wStar
             return1NMatrix[t, bestModelIndexes[m]]      = return1N
             returnCEOMatrix[t, bestModelIndexes[m]]     = returnCEO
@@ -266,25 +267,6 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     periodReturn = forecastRow*wStar
     period1NReturn = forecastRow*w1N
 
-    #perfect information
-    #=
-    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
-    @variables M begin
-            w[1:indexes]
-            u[1:indexes]
-            z
-            y
-    end
-
-    @objective(M,Min, gamma*y - Yvalues'*w)
-    @constraint(M, 0 .<= w)
-    @constraint(M, sum(w[i] for i=1:indexes) == 1)
-    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
-    solve(M)
-    wPerfect = getvalue(w)
-
-    periodPerfectReturn = forecastRow*wPerfect
-    =#
     return period1NReturn, periodReturn, wStar
 end
 
