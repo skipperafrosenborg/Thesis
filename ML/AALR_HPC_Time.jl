@@ -14,8 +14,8 @@ println("Leeeeroooy Jenkins")
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 
 #HPC path
-#inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 industry = "NoDur"
 mainData = loadIndexDataLOGReturn(industry, path)
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
@@ -32,6 +32,8 @@ dateAndReseccion = Array(mainData[:,end-1:end])
 mainDataArr = Array(mainData[:,1:end-2])
 
 colNames = names(mainData)
+
+expandedColNamesToString(expandColNamesTimeToString(colNames),1,1)
 
 nRows = size(mainDataArr)[1]
 nCols = size(mainDataArr)[2]
@@ -72,7 +74,7 @@ function solveStage1(trainingData)
 	### STAGE 1 ###
 	println("STAGE 1 INITIATED")
 	#Define solve
-	m = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads = 2))
+	m = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads = 1))
 
 	#Add binary variables variables
 	@variable(m, 0 <= z[1:nCols-1] <= 1, Bin )
@@ -112,7 +114,7 @@ println("STAGE 1 DONE")
 println("STAGE 2 INITIATED")
 bigM = 5
 tau = 2
-amountOfGammas = 3
+amountOfGammas = 5
 
 kValue = []
 RMSEValue = []
@@ -139,7 +141,7 @@ function stageThree(best3Beta, X, Y, allCuts)
 	nRows = size(X)[1]
 	cuts = Matrix(0, bCols+1)
 	rowsPerSample = nRows #All of rows in training data to generate beta estimates, but selected with replacement
-	totalSamples = 25 #25 different times we will get a beta estimate
+	totalSamples = 50 #50 different times we will get a beta estimate
 	nBoot = 1000
 
 	#For loop start
@@ -182,9 +184,12 @@ function stageThree(best3Beta, X, Y, allCuts)
 		bZeros = zeros(bCols)
 		bSample = createBetaDistribution(bSample, X, Y, bestK, totalSamples, rowsPerSample,  bestGamma, allCuts, bestZ) #standX, standY, k, sampleSize, rowsPerSample
 
+		bSample = zeros(50,bCols)
 		confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
 		confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
 		confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
+
+		bestBeta = zeros(bCols)
 
 		significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta)
 		significanceResultNONSI = [] # = significanceResult[xColumns]
@@ -218,7 +223,7 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 	HCPairCounter = 0
 
 	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 40, OutputFlag = 1, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
+	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 0, OutputFlag = 0, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
 
 	#Define variables
 	@variable(stage2Model, b[1:bCols]) #Beta values
@@ -288,10 +293,14 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 
 	if status == :InfeasibleOrUnbounded
 		bSolved = zeros(bCols)
+		#bSolved[1] = 1e-6+1e-6*rand()
         obj = 9999
         objBound = 9999
 	else
 		bSolved = getvalue(b)
+		if any(isnan,bSolved)
+			bSolved = zeros(bCols)
+		end
 		obj = getobjectivevalue(stage2Model)
 		objBound = getobjectivebound(stage2Model)
 	end
@@ -405,6 +414,7 @@ for r = 1+inputArg*10:10+inputArg*10#(nRows-trainingSize-predictions)
 		#Rebuild and solve model with cuts
 		for i = 1:kmax
 			for g = 1:amountOfGammas
+				println("\nSolving for k = $i and gamma index = $g\n")
 				bSolved = prevSolutions[Int64(g+(i-1)*amountOfGammas),:]
 				if i >= minNumberOfVar
 					#println("\nSolving for k = $i and gamma index = $g\n")
