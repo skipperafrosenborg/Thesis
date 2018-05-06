@@ -223,7 +223,7 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 	HCPairCounter = 0
 
 	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 0, OutputFlag = 0, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
+	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 40, OutputFlag = 0, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=20));
 
 	#Define variables
 	@variable(stage2Model, b[1:bCols]) #Beta values

@@ -16,7 +16,7 @@ path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCod
 
 #HPC path
 #inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
 mainData = loadCPUData(path)
 #mainData = loadConcrete(path)
 #mainData = loadHousingData(path)
@@ -25,8 +25,8 @@ mainDataArr = Array{Float64}(mainData)
 
 dataFile="CPU"
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
-path = "/zhome/9f/d/88706/SpecialeCode/Results"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
+#path = "/zhome/9f/d/88706/SpecialeCode/Results"
 #### MUST CHANGE ####
 fileName = path*"/"*dataFile*"/"
 
@@ -39,7 +39,7 @@ function solveStage1(trainingData)
 	### STAGE 1 ###
 	println("STAGE 1 INITIATED")
 	#Define solve
-	m = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads = 2))
+	m = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads = 1))
 
 	#Add binary variables variables
 	@variable(m, 0 <= z[1:nCols-1] <= 1, Bin )
@@ -178,7 +178,7 @@ function buildAndSolveStage2(standX, standY, curKmax, gamma, warmstartBool, warm
 	=#
 	maxTime = 90
 	#Define parameters and model
-	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = maxTime, OutputFlag = 0, Threads = nprocs()-1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40))
+	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = maxTime, OutputFlag = 0, Threads = 1, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40))
 
 	#Define variables
 	@variable(stage2Model, b[1:bCols]) #Beta values
@@ -346,7 +346,7 @@ for run=1:10
 	### STAGE 2 ###
 	println("STAGE 2 INITIATED")
 	bigM = 5
-	amountOfGammas = 3
+	amountOfGammas = 5
 
 	kValue = []
 	RSquaredValue = []
@@ -359,12 +359,12 @@ for run=1:10
 	best3Beta[:,1] = -1e3
 	signifBoolean = zeros(3)
 
-	SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))
-
+	maxVal = findmax(abs.(standX'*standY))[1]
+	tic()
 	kZeroCounter = 0
 	lassoOutput = zeros(300,5+bCols)
 	for i = 1:300
-		gammaArray = linspace(0, SSTO, 300)
+		gammaArray = linspace(maxVal, 0, 300)
 		lassoOutput[i,5] = gammaArray[i]
 		lassoOutput[i,1], lassoOutput[i,2], lassoOutput[i,3], lassoOutput[i,4], lassoOutput[i,6:end] = lassoValidationAndTest(gammaArray[i], standX, standY, standXVali, standYVali, standXTest, standYTest)
 		if lassoOutput[i,4] == 0
@@ -376,6 +376,7 @@ for run=1:10
 		println("Done $i/300")
 	end
 
+	println("LassoTime",run," = ",toc())
 	### EXTRACT PREDICTION AND ISRS AND DATE###
 	f = open(fileName*string(run)*"_Lasso"*dataFile*".csv", "w")
 	write(f, "Max Correlation,Test R^2,Vali R^2,k,gamma,"*expandedColNamesToString(colNames)*"\n")
@@ -383,7 +384,8 @@ for run=1:10
 	close(f)
 
 	#Spaced between 0 and half the SSTO since this would then get SSTO*absSumOfBeta which would force everything to 0
-	gammaArray = linspace(SSTO/2, 1, amountOfGammas)
+	maxVal = findmax(abs.(standX'*standY))[1]
+	gammaArray = linspace(maxVal, 1, amountOfGammas)
 
 	#INITIALISE STORING ARRAYS
 	bSample = []
@@ -395,6 +397,7 @@ for run=1:10
 	curRSquared = -1e3
 	HC = cor(standX)
 
+	tic()
 	#BUILD AND SOLVE MODEL
 	bSolved = []
 	warmstart = false
@@ -458,7 +461,7 @@ for run=1:10
 	end
 
 	best3Beta = cat(2,signifBoolean,best3Beta)
-
+	println("AALRTime",run," = ",toc())
 	rSquared = Array{Float64}(3,1)
 	#Convert into r^2 in stead
 
