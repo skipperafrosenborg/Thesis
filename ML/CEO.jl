@@ -247,6 +247,7 @@ end
 
 function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     indexes = 10
+
     M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
     @variables M begin
             w[1:indexes]
@@ -262,10 +263,10 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     solve(M)
     wStar = getvalue(w)
 
-    forecastRow = (exp10(Xrow')-1)*100
+    forecastRow = (exp(Xrow)-1)*100
 
-    periodReturn = forecastRow*wStar
-    period1NReturn = forecastRow*w1N
+    periodReturn = forecastRow'*wStar
+    period1NReturn = forecastRow'*w1N
 
     return period1NReturn, periodReturn, wStar
 end
@@ -431,7 +432,7 @@ function generateXandYs(industries, modelMatrix)
         end
 
         # Standardize
-        standX = mainXarr#zScoreByColumn(mainXarr)
+        standX = zScoreByColumn(mainXarr)
         standY = mainYarr
 
         XArrays[i] = standX
