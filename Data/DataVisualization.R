@@ -15,6 +15,12 @@ data = read.csv("Monthly - Average Equal Weighted Returns.csv", header =T)
 data$Average = rowMeans(data[,2:11], na.rm = TRUE)
 data$CumSumAverage = cumsum(data$Average)
 initCols = ncol(data)
+
+#data$AverageReturn[1] = 1
+#for(i in 2:nrow(data)){
+#  data$AverageReturn[i] = data$AverageReturn[(i-1)]*(1+(data$Average[i]/100))
+#}
+data$AverageReturn
 names(data)[1] = "YM"
 YM = data$YM
 data$Month = substr(data$YM, 5,6)
@@ -46,7 +52,7 @@ for(i in 2:split){
   plot(data$date, data[,i], type = "l", xlab = 'Time', ylab = names(data)[i])
 }
 
-for(i in split:initCols){
+for(i in (split+1):initCols){
   plot(data$date, data[,i], type = "l", xlab = 'Time', ylab = names(data)[i])
 }
 
