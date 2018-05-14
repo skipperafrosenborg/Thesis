@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 12
+trainingSize = 240
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
@@ -53,38 +53,22 @@ returnSAAMatrix = zeros(nRows-trainingSize)
 weightsSAA = zeros(nRows-trainingSize, 10)
 forecastRows = zeros(nRows-trainingSize, 10)
 
+startPoint = 241 #194608
+endPoint = 1080 #201607
 
-
-
-println("time $t / $total, gammaRisk $g / 10 ")
-trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
-expectedReturns = zeros(industriesTotal)
-expectedReturns = mean(trainingXArrays[1][:,1:10],1)'
-
-println("Mean 1 is ", expectedReturns[1], " and Mean 10 is ", expectedReturns[10])
-Sigma =  cov(trainingXArrays[1][:,1:10])
-
-#A=U^(T)U where U is upper triangular with real positive diagonal entries
-F = lufact(Sigma)
-U = F[:U]  #Cholesky factorization of Sigma
-
-#getting the actual Y values for each industry
-valY = zeros(10)
-for i = 1:10
-    valY[i] = validationY[i][1]
-end
-valY
 
 
 for g = 1:10
     fileName = "Results"
     gammaRisk = riskAversions[g] #riskAversion in MV optimization
-    total = nRows-trainingSize-1
-    for t = 1:(nRows-trainingSize-1)
+    total = (endPoint-trainingSize)
+    for t = (startPoint-trainingSize):(endPoint-trainingSize)
         println("time $t / $total, gammaRisk $g / 10 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
         expectedReturns = zeros(industriesTotal)
-        expectedReturns = mean(trainingXArrays[1][:,1:10], 1)'
+        for i=1:10
+            expectedReturns[i] = mean(trainingYArrays[i][:])
+        end
 
         Sigma =  cov(trainingXArrays[1][:,1:10])
 
