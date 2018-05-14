@@ -51,6 +51,12 @@ function loadIndexDataLOGReturn(industry, path)
     return mainData
 end
 
+function loadRiskFreeRate(industry, path)
+    cd(path)
+    mainData = CSV.read("riskFreeRateLOG.csv",header =["RfreeRate"],delim = ',', nullable = false)
+    return mainData
+end
+
 function loadIndexDataNoDurVIX(path)
     cd(path)
     mainData = CSV.read("monthlyNoDurReturnVIX.csv", header=["NoDur","Durbl",

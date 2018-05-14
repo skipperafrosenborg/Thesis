@@ -15,12 +15,19 @@ data = read.csv("Monthly - Average Equal Weighted Returns.csv", header =T)
 data$Average = rowMeans(data[,2:11], na.rm = TRUE)
 data$CumSumAverage = cumsum(data$Average)
 initCols = ncol(data)
+
+#data$AverageReturn[1] = 1
+#for(i in 2:nrow(data)){
+#  data$AverageReturn[i] = data$AverageReturn[(i-1)]*(1+(data$Average[i]/100))
+#}
+data$AverageReturn
 names(data)[1] = "YM"
 YM = data$YM
 data$Month = substr(data$YM, 5,6)
 data$Year = substr(data$YM, 1, 4)
 str(data)
 
+cor(data[2:11])
 
 
 ## Number of observations for estimation and prediction
@@ -46,7 +53,7 @@ for(i in 2:split){
   plot(data$date, data[,i], type = "l", xlab = 'Time', ylab = names(data)[i])
 }
 
-for(i in split:initCols){
+for(i in (split+1):initCols){
   plot(data$date, data[,i], type = "l", xlab = 'Time', ylab = names(data)[i])
 }
 
@@ -75,6 +82,7 @@ for(i in (split+2):initCols-1){
 #Years to see if yearly seasonality could be present
 plot.new()
 par(mfrow=c(plotRows, plotCols))
+names(data)[2]
 for(i in 2:split){
   boxplot(data[,i] ~ data$Year, main = paste("Yearly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
@@ -89,11 +97,11 @@ for(i in (split+1):(initCols-1)){
 plot.new()
 par(mfrow=c(plotRows, plotCols))
 for(i in 2:split){
-  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"))
+  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), xlab = "Return")
 }
 
 for(i in (split+1):(initCols-1)){
-  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"))
+  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), xlab = "Return")
 }
 
 
@@ -439,4 +447,9 @@ outputX = originalData[1:(outputRows-1),]
 
 predictionTime = data$YM[2:outputRows] #dates are the date of the Y variable, so we predict january '12, but have december '11 info available
 outputData = cbind(outputX, PredDataOutput, VIX, outputY, predictionTime, RecessionData$Recession)
+
 write.table(outputData, file = "monthlyNoDurLOGReturn2.csv", col.names = FALSE, row.names = F, sep = ",")
+
+
+## write table of risk free rate
+write.table(outputData[,20], file = "riskFreeRate.csv", col.names = FALSE, row.names = F, sep = ",")

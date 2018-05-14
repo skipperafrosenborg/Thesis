@@ -912,6 +912,30 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     return period1NReturn, periodReturn, wStar, forecastRow
 end
 
+function performMVOptimizationRISK(expectedReturns, U, gamma, Xrow, Yvalues)
+    indexes = 11
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+    @variables M begin
+            w[1:indexes]
+            u[1:indexes]
+            z
+            y
+    end
+
+    @objective(M,Min, gamma*y - expectedReturns'*w)
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
+    solve(M)
+    wStar = getvalue(w)
+
+    forecastRow = (exp(Xrow)-1)*100
+
+    periodReturn = forecastRow'*wStar
+    period1NReturn = forecastRow'*w1N
+
+    return period1NReturn, periodReturn, wStar, forecastRow
+end
 
 
 function generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
