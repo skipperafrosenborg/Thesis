@@ -61,7 +61,7 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
 
     y_realTimeSpan = zeros(size(y_realFull)[1]-timeSpan)
     for k = 1:size(y_realFull)[1]-timeSpan-1
-        y_realTimeSpan[k] = mean(y_realFull[k:k+timeSpan-1,2])
+        y_realTimeSpan[k] = mean(y_realFull[1:k+timeSpan-1,2])
     end
 
     path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
@@ -74,12 +74,17 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
         delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
         Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
 
-    y_realTimeSpan = y_realTimeSpan[1:end-1,end]
-    y_real = y_real[1:end,4:end]
-    y_hat = y_hat[1:end,:4:end]
+    startIndex=find(x -> x == 194608, y_real[:,2])[1]
+
+    y_realTimeSpan = y_realTimeSpan[startIndex:end-6,end]
+    y_real = y_real[startIndex:end-5,4:end]
+    y_hat = y_hat[startIndex:end-5,:4:end]
 
     nRows = size(y_hat)[1]
     nCols = size(y_hat)[2]
+
+    #194608
+    #201607
 
     classificationRate = Array{Float64}(nCols)
     meanErr = Array{Float64}(nCols)

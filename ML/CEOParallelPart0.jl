@@ -16,8 +16,8 @@ println("Leeeeroooy Jenkins")
 inputArg1 = 1
 inputArg2 = 1
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
 trainingSize = 240
 possibilities = 5
@@ -27,8 +27,8 @@ industriesTotal = length(industries)
 modelMatrix = zeros(industriesTotal, possibilities)
 #noDurModel = [1 0 1 1 1]
 #noDurModel = [1 0 1 0 1]
-noDurModel = [0 1 0 0 0]
-testModel = [0 1 0 0 0]
+noDurModel = [1 0 1 0 0]
+testModel = [1 0 1 0 0]
 modelMatrix[1, :] = noDurModel
 for i=2:industriesTotal
     modelMatrix[i, :] = noDurModel
@@ -72,7 +72,7 @@ for t=1:(nRows-trainingSize-2)
     weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gamma)
 end
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
-path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
+#path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
 writedlm(path*"weightsPerfect.csv", weightsPerfect, ",")
 writedlm(path*"returnPerfectMatrix.csv", returnPerfectMatrix, ",")

@@ -1,18 +1,31 @@
 using StatsBase
 using DataFrames
 using CSV
+using JuMP
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-nRows = 1070
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/AALRTest/12-1/"
+timeSpan = 240
+if timeSpan == 12
+    nRows = 1070
+else
+    nRows = 1060+24-timeSpan
+end
+
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/AALRTest/"*string(timeSpan)*"-1/"
 cd(path)
 
 mainData = zeros(3, nRows, 1472)
 
 for i = 1:nRows
-    f = open(string(i)*"AALRBestK.csv")
+    if timeSpan == 120
+        f = open(string(i)*"AALRBestK_120.csv")
+    elseif timeSpan == 240
+        f = open(string(i)*"AALRBestK_240.csv")
+    else
+        f = open(string(i)*"AALRBestK.csv")
+    end
     readline(f)
     s = readline(f)
     mainData[1, i, :] = parse.(Float64, split(s, ","))
@@ -31,16 +44,23 @@ cd(path)
 y_realFull = CSV.read("RealValue.CSV",
     delim = ',', nullable=false, header=["Date", "y_real"], types = [Int64, Float64])
 
-timeSpan = 12
-y_realTimeSpan = zeros(size(y_realFull)[1]-timeSpan-4)
-for k = 1:size(y_realFull)[1]-timeSpan-4
-    y_realTimeSpan[k] = mean(y_realFull[k:k+timeSpan-1,2])
+y_realTimeSpan = zeros(size(y_realFull)[1]-timeSpan)
+for k = 1:size(y_realFull)[1]-timeSpan-1
+    y_realTimeSpan[k] = mean(y_realFull[1:k+timeSpan-1,2])
 end
 
 tempArr = zeros(3,8)
 for i = 1:3
-    y_real = mainData[i,:,3]
-    y_hat = mainData[i,:,4]
+    startIndex=find(x -> x == 194608, mainData[i,:,1])[1]
+
+    if timeSpan == 12
+        y_real = mainData[i,startIndex:end-2,3]
+        y_hat = mainData[i,startIndex:end-2,4]
+    else
+        y_real = mainData[i,startIndex:end-4,3]
+        y_hat = mainData[i,startIndex:end-4,4]
+    end
+    nRows=840
 
     classificationRate = Array{Float64}(3)
     meanErr = Array{Float64}(3)
@@ -60,7 +80,6 @@ for i = 1:3
     # SSTO for each i = (y_real (the actual one) - y_realTimeSpan)^2
     # R^2 for each i = squared err / SSTO
 
-    indvRSquared = Array{Float64}(nRows,1)
     errSum = 0
     errSquaredSum = 0
     SSres = 0
@@ -91,3 +110,4 @@ f = open(path*".csv", "w")
 write(f, "Dataset, Classification Rate, R^2, Mean Error, RMSE, Classification Rate Index, R^2 Index, Mean Error Index, RMSE Index\n")
 writecsv(f,hcat([1,2,3],tempArr))
 close(f)
+println("Done")

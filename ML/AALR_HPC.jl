@@ -17,13 +17,13 @@ path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCod
 #HPC path
 #inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
-mainData = loadCPUData(path)
-#mainData = loadConcrete(path)
+#mainData = loadCPUData(path)
+mainData = loadConcrete(path)
 #mainData = loadHousingData(path)
 mainDataArr = Array{Float64}(mainData)
 #mainData = loadIndexDataNoDurLOGReturn(path)
 
-dataFile="CPU"
+dataFile="Concrete"
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
 #path = "/zhome/9f/d/88706/SpecialeCode/Results"

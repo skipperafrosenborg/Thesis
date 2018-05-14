@@ -54,7 +54,7 @@ function findPerfectResults(trainingXArrays, Xrow, Yvalues, gamma)
     @constraint(M, norm([2*U'*w;y-1]) <= y+1)
     solve(M)
     wPerfect = getvalue(w)
-    forecastRow = (exp10.(Xrow')-1)*100
+    forecastRow = (exp.(Xrow')-1)*100
     periodPerfectReturn = forecastRow*wPerfect
 
     return wPerfect, periodPerfectReturn
@@ -77,7 +77,7 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     solve(M)
     wStar = getvalue(w)
 
-    forecastRow = (exp10.(Xrow')-1)*100
+    forecastRow = (exp.(Xrow')-1)*100
 
     periodReturn = forecastRow*wStar
     period1NReturn = forecastRow*w1N

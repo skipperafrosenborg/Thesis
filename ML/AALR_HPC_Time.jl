@@ -14,13 +14,13 @@ println("Leeeeroooy Jenkins")
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 
 #HPC path
-inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
-industry = "NoDur"
+#inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+industry = "Utils"
 mainData = loadIndexDataLOGReturn(industry, path)
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
 
-path = "/zhome/9f/d/88706/SpecialeCode/Results"
+#path = "/zhome/9f/d/88706/SpecialeCode/Results"
 #### MUST CHANGE ####
 fileName = path*"/IndexData/AALRTest/"
 
@@ -55,13 +55,13 @@ allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
 
-#=
+
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/PythonCode/Data"
 cd(path)
 writedlm("allData"*industry*".csv", allData,",")
 allData[1,end]
 standX[1,end]
-=#
+
 
 trainingSize = 12
 predictions = 1

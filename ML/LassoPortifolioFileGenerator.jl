@@ -159,3 +159,5 @@ f = open(path*"Indicators240.csv", "w")
 writecsv(f, industryArrFile)
 writecsv(f,indicatorValues240)
 close(f)
+
+println("Done")
