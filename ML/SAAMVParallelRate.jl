@@ -57,8 +57,7 @@ rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
 startPoint = 241 #194608
 endPoint = 1080 #201607
-hcat(XArrays[1][:,1:10], rfRates)
-trainX = trainingXArrays[1]
+
 
 for g = 1:10
     fileName = "Results"
