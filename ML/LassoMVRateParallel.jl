@@ -100,9 +100,9 @@ for g = 1:10
         returnPPDMatrix[t]     = returnPPD
     end
     fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
-    writedlm(fileName*"ppdWeights.csv", weightsPPD,",")
-    writedlm(fileName*"ppdReturns.csv", returnPPDMatrix,",")
-    writedlm(fileName*"ppd1N.csv", return1NMatrix,",")
+    writedlm(fileName*"ppdRFRWeights.csv", weightsPPD,",")
+    writedlm(fileName*"ppdRFRReturns.csv", returnPPDMatrix,",")
+    writedlm(fileName*"ppdRFR1N.csv", return1NMatrix,",")
 end
 
 
