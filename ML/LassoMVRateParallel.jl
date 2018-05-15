@@ -3,12 +3,14 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 60
+trainingSize = 240
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
-cd("$(homedir())/Documents/GitHub/Thesis/Data")
-path = "$(homedir())/Documents/GitHub/Thesis/Data"
+
+#cd("$(homedir())/Documents/GitHub/Thesis/Data")
+#path = "$(homedir())/Documents/GitHub/Thesis/Data"
+
 @everywhere include("ParallelModelGeneration.jl")
 include("SupportFunction.jl")
 include("DataLoad.jl")
@@ -18,58 +20,64 @@ println("Leeeeroooy Jenkins")
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
-#=
-VIX = 1
-raw = 0
-expTrans = 1
-timeTrans = 1
-TA = 1
-trainingSize = 48
-=#
 possibilities = 5
 industries = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 industriesTotal = length(industries)
 
 modelMatrix = zeros(industriesTotal, possibilities)
+noDurModel = [1 0 1 1 1]
 testModel = [0 1 0 0 0]
-for i=1:industriesTotal
-    modelMatrix[i, :] = testModel
+modelMatrix[1, :] = noDurModel
+for i=2:industriesTotal
+    modelMatrix[i, :] = noDurModel
 end
 ##START OF A METHOD
 
-path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
-
+#path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
 
 riskAversions = linspace(0, 2.4, 10)
 XArrays, YArrays = generateXandYs(industries, modelMatrix)
-
+gamma = 0.1 #regularization term in LASSO
 nRows = size(XArrays[1])[1]
 w1N = repeat([0.1], outer = 11) #1/N weights
 return1NMatrix = zeros(nRows-trainingSize)
-returnSAAMatrix = zeros(nRows-trainingSize)
+returnPPDMatrix = zeros(nRows-trainingSize)
 
-weightsSAA = zeros(nRows-trainingSize, 11)
+weightsPPD = zeros(nRows-trainingSize, 11)
 forecastRows = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
-startPoint = 241 #194608
-endPoint = 1080 #201607
 
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+path = "/zhome/9f/d/88706/SpecialeCode/Results/IndexData/LassoTest/"
 
 for g = 1:10
-    fileName = "Results"
+    fileName = "/zhome/9f/d/88706/SpecialeCode/Results/MV/PointPrediction/"
     gammaRisk = riskAversions[g] #riskAversion in MV optimization
     total = nRows-trainingSize-1
-    for t = (startPoint-trainingSize):(endPoint-trainingSize)
+    for t = 1:840#(nRows-trainingSize-1)
         println("time $t / $total, gammaRisk $g / 10 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
-        expectedReturns = zeros(industriesTotal+1)
-        for i=1:10
-            expectedReturns[i] = mean(trainingYArrays[i][:])
+        expectedReturns = zeros(industriesTotal)
+        for i = 1:industriesTotal
+            #ISRsquared, Indicator, estimate, bSolved = generatSolveAndProcess(trainingXArrays[i], trainingYArrays[i], validationXRows[i][1,:], validationY[i][1], gamma)
+            #expectedReturns[i] = estimate
+            summary = CSV.read(path*industries[i]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+
+            maxR2, fileNameIndex = findmax(summary[:,3]) # Find file name for  max R^2
+
+            bestFileName = summary[fileNameIndex,1]
+            fileIndex = summary[fileNameIndex,7] # Find gamma
+
+            estimate = CSV.read(path*industries[i]*"/"*string(trainingSize)*"-1/"*"240_"*bestFileName*"_predicted.CSV",nullable=false)
+            expectedReturns[i] = estimate[:,3+fileIndex][t]
         end
+        expectedReturns
         expectedReturns[11] = rfRates[t+trainingSize]
         rfRatesVec = rfRates[t:(t+trainingSize-1)]
         trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
@@ -85,16 +93,16 @@ for g = 1:10
             valY[i] = validationY[i][1]
         end
         valY[11] = rfRates[t+trainingSize]
-        return1N, returnSAA, wSAA, forecastRow = performMVOptimizationRISK(expectedReturns[:], U, gammaRisk, valY, valY)
-        weightsSAA[t, 1:11]    = wSAA
+        return1N, returnPPD, wPPD, forecastRow = performMVOptimizationRISK(expectedReturns, U, gammaRisk, valY, valY)
+        weightsPPD[t, 1:11]    = wPPD
         forecastRows[t, 1:11]  = forecastRow
         return1NMatrix[t]      = return1N
-        returnSAAMatrix[t]     = returnSAA
+        returnPPDMatrix[t]     = returnPPD
     end
     fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
-    writedlm(fileName*"saaRFRWeights.csv", weightsSAA,",")
-    writedlm(fileName*"SAARFRReturns.csv", returnSAAMatrix,",")
-    writedlm(fileName*"saaRFR1N.csv", return1NMatrix,",")
+    writedlm(fileName*"ppdWeights.csv", weightsPPD,",")
+    writedlm(fileName*"ppdReturns.csv", returnPPDMatrix,",")
+    writedlm(fileName*"ppd1N.csv", return1NMatrix,",")
 end
 
 
