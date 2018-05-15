@@ -24,6 +24,7 @@ summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv
 
 testMat = Array{Array{Float64}}(24)
 
+
 for i = 1:24
     #Fetch dataset from summary
     fileName = summary[i,1]
@@ -38,11 +39,11 @@ for i = 1:24
         nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
 end
 
+
 #=Filenames:
 1,     2     3      4       5       6       7        8
 Clean, TA,   Exp,   ExpTA,  Time,   TimeTA, TimeExp, TimeExpTA
 =#
-
 ### Raw datasets ###
 # Check for all datasets if the raw input are used
 # Are any of the raw inputs always used?
@@ -95,6 +96,21 @@ function rawInputUsage()
     plotlyjs()
     plot(industryCounter, title="Industry Overview", linewidth=2, label=industryArr2, yaxis=("% used in period t",(0,1),0:0.1:1),xaxis=("Months",0:100:845))
 end
+
+for i = 1:24
+    #Fetch dataset from summary
+    fileName = summary[i,1]
+
+    #Fetch best gamma from summary, based on R^2
+    bestGamma = summary[i,7]
+
+    nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+    #Fetch bSolved matrix
+    testMat[i] = bSolveMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+        nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+end
+
 
 rawNonLinearUsage()
 # Are non linear transformation used?
@@ -180,10 +196,10 @@ end
 # Are non linear transformation of times series used?
     # Important!
 function rawTimeExpUsage()
-    avgUsage = zeros(520)
+    avgUsage = zeros(10)
 
-    for i=1:520
-        avgUsage[i] = countnz(testMat[7][:,i])
+    for i=1:10
+        avgUsage[i] = countnz(testMat[1][:,i])
     end
 
     realmean = mean(avgUsage)
@@ -191,20 +207,64 @@ function rawTimeExpUsage()
 
     stdev = std(avgUsage)
 
-    for i=1:520
+    for i=1:10
         zscore = (avgUsage[i]-realmean)/stdev
         if zscore > 1.965 || zscore < -1.965
-            println("Paremeter ", i, " is significant")
+            println("Paremeter ", i, " is significant, and had an average of ", avgUsage[i])
         end
     end
-
 end
 
 
 #Are the combination of parameters used within the past 10 years seen earlier?
 
+for i = 9:9+8
+    macroUsage(i)
+end
 # Macro dataset
-    # Are non linear transformation used?
+function macroUsage(datIndx)
+    dataset = testMat[datIndx]
+
+    nCols = size(dataset)[2]
+    nCols = 27
+
+    avgUsage = zeros(nCols)
+
+    for i=1:nCols
+        avgUsage[i] = countnz(dataset[:,i])
+    end
+
+    realmean = mean(avgUsage)
+    degOfFree = nCols-1
+
+    stdev = std(avgUsage)
+
+    for i=1:nCols
+        zscore = (avgUsage[i]-realmean)/stdev
+        if zscore > 1.965 || zscore < -1.965
+            #println("Paremeter ", i, " is significant, and had an average of ", avgUsage[i])
+        end
+    end
+
+    println(find(x -> x < 845*0.05, avgUsage))
+    #println(avgUsage[11:27])
+end
+
+function macroUsage()
+    nCols = 27
+
+    avgUsage = zeros(8,nCols)
+
+    for j=9:9+7
+        for i=1:nCols
+            avgUsage[j-8,i] = countnz(testMat[j][:,i])
+        end
+    end
+
+    println(find(x -> x < 845*0.05, mean(avgUsage,1)))
+    #println(avgUsage[11:27])
+end
+    # Are non linear transformation used
     # Are time series used?
     # Are TA used?
     # Are non linear transformation of times series used?
