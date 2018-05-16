@@ -48,7 +48,7 @@ amountOfModels = nGammas^4
 
 #Initialization of parameters
 w1N = repeat([0.1], outer = 10) #1/N weights
-gamma = 10 #risk aversion
+gamma = 0 #risk aversion
 validationPeriod = 5
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
 return1NMatrix = zeros(nRows-trainingSize, amountOfModels)

@@ -27,15 +27,14 @@ industriesTotal = length(industries)
 modelMatrix = zeros(industriesTotal, possibilities)
 noDurModel = [1 0 1 1 1]
 testModel = [0 1 0 0 0]
-modelMatrix[1, :] = noDurModel
-for i=2:industriesTotal
-    modelMatrix[i, :] = noDurModel
+for i=1:industriesTotal
+    modelMatrix[i, :] = testModel
 end
 ##START OF A METHOD
 
-#path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
+path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
 
@@ -52,6 +51,54 @@ forecastRows = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
+
+
+#GENERATING PERFECT RESULTS WITHOUT RISK FREE RATE
+returnPerfectMatrix = zeros(nRows-trainingSize)
+weightsPerfect = zeros(nRows-trainingSize, 10)
+path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/PerfectReturns/"
+for g = 1:10
+    fileName = "Perfect"
+    gammaRisk = riskAversions[g]
+    for t=1:840
+        println("time $t / 840, gammaRisk $g / 10 ")
+        trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
+        valY = zeros(10)
+        for i = 1:10
+            valY[i] = validationY[i][1]
+        end
+        weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gammaRisk)
+    end
+    fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
+    writedlm(fileName*"Weights.csv", weightsPerfect,",")
+    writedlm(fileName*"Returns.csv", returnPerfectMatrix,",")
+end
+
+#GENERATING PERFECT RESULTS WITH RISK FREE RATE
+returnPerfectMatrix = zeros(nRows-trainingSize)
+weightsPerfect = zeros(nRows-trainingSize, 11)
+path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/Perfect RFR Returns/"
+for g = 1:10
+    fileName = "PerfectRFR"
+    gammaRisk = riskAversions[g]
+    for t=1:840
+        println("time $t / 840, gammaRisk $g / 10 ")
+        trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
+        valY = zeros(11)
+        for i = 1:10
+            valY[i] = validationY[i][1]
+        end
+        valY[11] = rfRates[t+trainingSize]
+        rfRatesVec = rfRates[t:(t+trainingSize-1)]
+        trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+        weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectRFRResults(trainX, valY, valY, gammaRisk)
+    end
+    fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
+    writedlm(fileName*"Weights.csv", weightsPerfect,",")
+    writedlm(fileName*"Returns.csv", returnPerfectMatrix,",")
+end
+a
+
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
 path = "/zhome/9f/d/88706/SpecialeCode/Results/IndexData/LassoTest/"

@@ -887,6 +887,34 @@ function findPerfectResults(trainingXArrays, Xrow, Yvalues, gamma)
     return wPerfect, periodPerfectReturn
 end
 
+function findPerfectRFRResults(trainX, Xrow, Yvalues, gamma)
+    indexes = 11
+    Sigma =  cov(trainX)
+
+    #A=U^(T)U where U is upper triangular with real positive diagonal entries
+    F = lufact(Sigma)
+    U = F[:U]  #Cholesky factorization of Sigma
+
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+    @variables M begin
+            w[1:indexes]
+            u[1:indexes]
+            z
+            y
+    end
+
+    @objective(M,Min, gamma*y - Yvalues'*w)
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
+    solve(M)
+    wPerfect = getvalue(w)
+    forecastRow = (exp(Xrow')-1)*100
+    periodPerfectReturn = forecastRow*wPerfect
+
+    return wPerfect, periodPerfectReturn
+end
+
 function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     indexes = 10
     M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
