@@ -129,6 +129,13 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
                 valY[i] = validationY[i][1]
             end
             valY[11] = rfRates[t+trainingSize]
+
+            rfRatesVec = rfRates[t:(t+trainingSize-1)]
+            trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+            Sigma =  cov(trainX)
+            F = lufact(Sigma)
+            U = F[:U]  #Cholesky factorization of Sigma
+
             return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11]     = wStar
             return1NMatrix[t]      = return1N
@@ -154,6 +161,13 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
                 valY[i] = validationY[i][1]
             end
             valY[11] = rfRates[t+trainingSize]
+
+            rfRatesVec = rfRates[t:(t+trainingSize-1)]
+            trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+            Sigma =  cov(trainX)
+            F = lufact(Sigma)
+            U = F[:U]  #Cholesky factorization of Sigma
+
             return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11]     = wStar
             return1NMatrix[t]      = return1N

@@ -103,6 +103,12 @@ for m = 1+(inputArg2*25):25+(inputArg2*25)#:amountOfModels
     end
     valY[11] = rfRates[t+trainingSize]
     #return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, OOSRow[1][1:10], valY)
+    rfRatesVec = rfRates[t:(t+trainingSize-1)]
+    trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+    Sigma =  cov(trainX)
+    F = lufact(Sigma)
+    U = F[:U]  #Cholesky factorization of Sigma
+
     return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
     weightsCEO[t, 1:11, m]        = wStar
     return1NMatrix[t, m]       = return1N
