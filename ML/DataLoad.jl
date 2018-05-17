@@ -1,3 +1,15 @@
+function loadDiabetes(path)
+    cd(path)
+    mainData = CSV.read("Diabetes/diabetes.csv", delim = ";", nullable=false)
+    return mainData
+end
+
+function loadWineQuality(path)
+    cd(path)
+    mainData = CSV.read("WineQualityRed/winequality-red.csv", delim = ";", nullable=false, types=fill(Float64,12))
+    return mainData
+end
+
 function loadHousingData(path)
     cd(path)
     mainData = CSV.read("AmesHousingModClean.csv", delim = ';', nullable=false)

@@ -12,21 +12,23 @@ println("Leeeeroooy Jenkins")
 
 #Skipper's path
 inputArg=0
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
 
 #HPC path
 #inputArg = parse(Int64, ARGS[1]) #Should range from 0 to 106
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/"
 #mainData = loadCPUData(path)
-mainData = loadConcrete(path)
+#mainData = loadConcrete(path)
 #mainData = loadHousingData(path)
+#mainData = loadDiabetes(path)
+mainData = loadWineQuality(path)
 mainDataArr = Array{Float64}(mainData)
 #mainData = loadIndexDataNoDurLOGReturn(path)
 
-dataFile="Concrete"
+dataFile="WineQualityRed"
 
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
-#path = "/zhome/9f/d/88706/SpecialeCode/Results"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results"
+path = "/zhome/9f/d/88706/SpecialeCode/Results"
 #### MUST CHANGE ####
 fileName = path*"/"*dataFile*"/"
 
@@ -294,9 +296,9 @@ bCols = 0
 nRows = 0
 signifBoolean = 0
 best3Beta = 0
-#run = parse(Int64, ARGS[1])
+run = parse(Int64, ARGS[1])
 
-for run=1:10
+#for run=1:10
 	halfRows = Int64(floor(size(mainDataArr)[1]/2))
 	train, test = splitDataIn2(mainDataArr, halfRows, size(mainData)[1])
 	halfRows = Int64(floor(size(test)[1]/2))
@@ -360,9 +362,10 @@ for run=1:10
 	signifBoolean = zeros(3)
 
 	maxVal = findmax(abs.(standX'*standY))[1]
-	tic()
+
 	kZeroCounter = 0
 	lassoOutput = zeros(300,5+bCols)
+	tic()
 	for i = 1:300
 		gammaArray = linspace(maxVal, 0, 300)
 		lassoOutput[i,5] = gammaArray[i]
@@ -375,11 +378,11 @@ for run=1:10
 		end
 		println("Done $i/300")
 	end
+	println("LassoTime",run," = ",toc()," seconds.")
 
-	println("LassoTime",run," = ",toc())
 	### EXTRACT PREDICTION AND ISRS AND DATE###
 	f = open(fileName*string(run)*"_Lasso"*dataFile*".csv", "w")
-	write(f, "Max Correlation,Test R^2,Vali R^2,k,gamma,"*expandedColNamesToString(colNames)*"\n")
+	write(f, "Max Correlation,Test R^2,Vali R^2,k,gamma,"*expandedColNamesToString(colNames,1,0)*"\n")
 	writecsv(f,lassoOutput)
 	close(f)
 
@@ -397,10 +400,10 @@ for run=1:10
 	curRSquared = -1e3
 	HC = cor(standX)
 
-	tic()
 	#BUILD AND SOLVE MODEL
 	bSolved = []
 	warmstart = false
+	tic()
 	for i = 1:kmax
 		for g = 1:amountOfGammas
 			println("\nSolving for k = $i and gamma index = $g\n")
@@ -459,9 +462,9 @@ for run=1:10
 
 		runCount += 1
 	end
-
+	println("AALRTime",run," = ",toc()," seconds")
 	best3Beta = cat(2,signifBoolean,best3Beta)
-	println("AALRTime",run," = ",toc())
+
 	rSquared = Array{Float64}(3,1)
 	#Convert into r^2 in stead
 
@@ -478,10 +481,10 @@ for run=1:10
 	best3Beta = cat(2,maxCor,best3Beta)
 
 	### EXTRACT PREDICTION AND ISRS AND DATE###
-	f = open(fileName*string(run)*"_"*dataFile*"_GurobiParas.csv", "w")
-	write(f, "Max Correlation,Test R^2,Significant,Vali R^2,k,gamma,"*expandedColNamesToString(colNames)*"\n")
+	f = open(fileName*string(run)*"_"*dataFile*".csv", "w")
+	write(f, "Max Correlation,Test R^2,Significant,Vali R^2,k,gamma,"*expandedColNamesToString(colNames,1,0)*"\n")
 	writecsv(f,best3Beta)
 	close(f)
 
 	println("\nComplete\n")
-end
+#end

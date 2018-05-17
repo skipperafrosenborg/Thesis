@@ -29,8 +29,8 @@ industriesTotal = length(industries)
 modelMatrix = zeros(industriesTotal, possibilities)
 #noDurModel = [1 0 1 1 1]
 #noDurModel = [1 0 1 0 1]
-noDurModel = [1 0 1 0 0]
-testModel = [1 0 1 0 0]
+noDurModel = [1 0 0 1 1]
+testModel = [1 0 0 1 1]
 modelMatrix[1, :] = noDurModel
 for i=2:industriesTotal
     modelMatrix[i, :] = noDurModel
@@ -64,7 +64,7 @@ modelConfig
 
 #Initialization of parameters
 w1N = repeat([0.1], outer = 10) #1/N weights
-gamma = 10 #risk aversion
+gamma = 2.4 #risk aversion
 validationPeriod = 5
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
 return1NMatrix = zeros(nRows-trainingSize, amountOfModels)

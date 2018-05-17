@@ -6,7 +6,7 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-dataSet = "Raw/"
+dataSet = "VIXTimeTA2.4/"
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"*dataSet
 cd(path)
@@ -24,4 +24,4 @@ end
 
 mean(totalMatrix[:,end-4:end],1)
 
-writedlm(path*"Raw.csv",totalMatrix,",")
+writedlm(path*"VIXTimeTA2_4.csv",totalMatrix,",")
