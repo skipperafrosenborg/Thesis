@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 60
+trainingSize = 12
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
@@ -63,7 +63,7 @@ for g = 1:10
     fileName = "Results"
     gammaRisk = riskAversions[g] #riskAversion in MV optimization
     total = nRows-trainingSize-1
-    for t = (startPoint-trainingSize):(endPoint-trainingSize)
+    for t = 1:840 #(startPoint-trainingSize):(endPoint-trainingSize)
         println("time $t / $total, gammaRisk $g / 10 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
         expectedReturns = zeros(industriesTotal+1)
@@ -92,9 +92,9 @@ for g = 1:10
         returnSAAMatrix[t]     = returnSAA
     end
     fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
-    writedlm(fileName*"saaRFRWeights.csv", weightsSAA,",")
+    writedlm(fileName*"SAARFRWeights.csv", weightsSAA,",")
     writedlm(fileName*"SAARFRReturns.csv", returnSAAMatrix,",")
-    writedlm(fileName*"saaRFR1N.csv", return1NMatrix,",")
+    #writedlm(fileName*"SAARFR1N.csv", return1NMatrix,",")
 end
 
 

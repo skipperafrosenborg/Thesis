@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 240
+trainingSize = 12
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"

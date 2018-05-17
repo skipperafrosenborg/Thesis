@@ -10,7 +10,7 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 #Esben's path
-path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexData"
+path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff"
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexData/"
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexData/"
@@ -57,7 +57,7 @@ end
 modelConfig
 
 #Initialization of parameters
-w1N = repeat([0.1], outer = 10) #1/N weights
+w1N = repeat([0.1], outer = 11) #1/N weights
 gamma = 10 #risk aversion
 validationPeriod = 5
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
@@ -81,6 +81,10 @@ for t=1:(nRows-trainingSize-2)
     end
     weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gamma)
 end
+
+
+
+
 
 println("Starting CEO Validation loop")
 for t=1:50# (nRows-trainingSize-2)
