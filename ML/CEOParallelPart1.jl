@@ -75,6 +75,9 @@ bestModelAmount = 5
 bestModelConfigs = zeros(bestModelAmount, 4)
 bestModelIndexes = zeros(bestModelAmount)
 
+rfRates = loadRiskFreeRate("NoDur", path)
+rfRates = rfRates[:,1]
+
 weightsPerfect = zeros(nRows-trainingSize, 10)
 weightsCEO     = zeros(nRows-trainingSize, 10, nGammas^4)
 

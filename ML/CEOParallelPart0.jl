@@ -48,11 +48,7 @@ amountOfModels = nGammas^4
 
 #Initialization of parameters
 w1N = repeat([0.1], outer = 10) #1/N weights
-<<<<<<< HEAD
-gamma = 2.4 #risk aversion
-=======
 gamma = 0 #risk aversion
->>>>>>> 2e4faf1208c7e521e2bff6061eef6ddce715c8d4
 validationPeriod = 5
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
 return1NMatrix = zeros(nRows-trainingSize, amountOfModels)
@@ -73,7 +69,9 @@ for t=1:(nRows-trainingSize-2)
     for i = 1:10
         valY[i] = validationY[i][1]
     end
-    weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gamma)
+    rfRatesVec = rfRates[t:(t+trainingSize-1)]
+    trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+    weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainX, valY, valY, gamma)
 end
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"

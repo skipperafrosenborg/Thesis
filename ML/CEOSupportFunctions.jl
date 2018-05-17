@@ -26,15 +26,58 @@ function createDataSplits(XArrays, YArrays, t, trainingSize)
     return trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY
 end
 
-
+#=
 function calculatePvalue(return1N, returnPerfect, returnCEO)
     PValue = 1 - (returnCEO-returnPerfect)/(return1N-returnPerfect)
+    return PValue
+end
+=#
+function calculatePvalue(return1N, returnPerfect, returnCEO)
+    nominator = returnPerfect-returnCEO
+    if returnCEO < 0
+        nominator = abs(returnCEO-returnPerfect)
+    end
+
+    denominator = returnPerfect-return1N
+    if return1N < 0
+        denominator = abs(return1N-returnPerfect)
+    end
+
+    PValue = 1 - nominator/denominator
     return PValue
 end
 
 function findPerfectResults(trainingXArrays, Xrow, Yvalues, gamma)
     indexes = 10
     Sigma =  cov(trainingXArrays[1][:,1:10])
+
+    #A=U^(T)U where U is upper triangular with real positive diagonal entries
+    F = lufact(Sigma)
+    U = F[:U]  #Cholesky factorization of Sigma
+
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads=1))
+    @variables M begin
+            w[1:indexes]
+            u[1:indexes]
+            z
+            y
+    end
+
+    @objective(M,Min, gamma*y - Yvalues'*w)
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
+    solve(M)
+    wPerfect = getvalue(w)
+    forecastRow = (exp.(Xrow')-1)*100
+    periodPerfectReturn = forecastRow*wPerfect
+
+    return wPerfect, periodPerfectReturn
+end
+
+function findPerfectResultsRFR(trainingXArrays, Xrow, Yvalues, gamma)
+    indexes = 11
+    Sigma =  cov(trainingXArrays[1][:,1:11])
 
     #A=U^(T)U where U is upper triangular with real positive diagonal entries
     F = lufact(Sigma)
@@ -86,6 +129,30 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
 end
 
 
+function performMVOptimizationRISK(expectedReturns, U, gamma, Xrow, Yvalues)
+    indexes = 11
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
+    @variables M begin
+            w[1:indexes]
+            u[1:indexes]
+            z
+            y
+    end
+
+    @objective(M,Min, gamma*y - expectedReturns'*w)
+    @constraint(M, 0 .<= w)
+    @constraint(M, sum(w[i] for i=1:indexes) == 1)
+    @constraint(M, norm([2*U'*w;y-1]) <= y+1)
+    solve(M)
+    wStar = getvalue(w)
+
+    forecastRow = (exp(Xrow)-1)*100
+
+    periodReturn = forecastRow'*wStar
+    period1NReturn = forecastRow'*w1N
+
+    return period1NReturn, periodReturn, wStar, forecastRow
+end
 
 function generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
     industriesTotal = 10
