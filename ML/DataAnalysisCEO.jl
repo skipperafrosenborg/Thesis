@@ -8,7 +8,7 @@ println("Leeeeroooy Jenkins")
 
 dataSet = "VIXTimeTA2.4/"
 
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"*dataSet
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/RFR/"*dataSet
 cd(path)
 
 totalMatrix = zeros(844,12)

@@ -48,55 +48,6 @@ Clean, TA,   Exp,   ExpTA,  Time,   TimeTA, TimeExp, TimeExpTA
 # Check for all datasets if the raw input are used
 # Are any of the raw inputs always used?
 # How many percent of the 8 datasets uses the prediction term in period t
-rawInputUsage()
-#NoDur is clearly the strongest predictor and also shows the strongest prediction power in recent terms
-function rawInputUsage()
-    println("Predicting dataset ",industryArr[j])
-    industryCounter = zeros(845,10)
-    for t = 1:845
-        for curIndustry = 1:10
-            for dataset = 1:10
-                if testMat[dataset][t,curIndustry] != 0
-                    industryCounter[t,curIndustry] += 1
-                end
-            end
-        end
-    end
-    industryCounter = industryCounter/10
-
-    avgUsage = mean(industryCounter,1)
-    for i=1:10
-        println(industryArr[i], " is used \t", round(avgUsage[i],3),"% of the time across all datasets")
-    end
-    println()
-
-    avgUsageIfActive = zeros(1,10)
-    for curIndustry = 1:10
-        iter = 0
-        for t = 1:845
-            if industryCounter[t,curIndustry] != 0
-                iter += 1
-                avgUsageIfActive[1,curIndustry] += industryCounter[t,curIndustry]
-            end
-        end
-        avgUsageIfActive[1,curIndustry] = avgUsageIfActive[1,curIndustry]/iter
-    end
-
-    for i=1:10
-        println(industryArr[i], " is used \t", round(avgUsageIfActive[i],3),"% of the time across all datasets when it's active")
-    end
-
-    #Create label rowvector
-    industryArr2 = Array{String}(1,10)
-    for i = 1:10
-        industryArr2[1,i] = industryArr[i]
-    end
-
-    # Graph it
-    plotlyjs()
-    plot(industryCounter, title="Industry Overview", linewidth=2, label=industryArr2, yaxis=("% used in period t",(0,1),0:0.1:1),xaxis=("Months",0:100:845))
-end
-
 getRaw()
 function getRaw()
     avgUsage = zeros(10,10)
@@ -158,6 +109,261 @@ function getRaw()
     writedlm(path*"ParametersAnalysis/industryRawAverageUsage.csv",avgUsage,",")
 end
 
+getRawCorrectPredictions()
+function getRawCorrectPredictions()
+    avgUsage = zeros(10,10)
+    avgCorrectUsage = zeros(10,10)
+    signifMat = Array{String}(10,10)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,10)
+        for i = 1:1
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            realValues = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_real.csv",
+                nullable=false, types=[Int64, Int64, Int64, Float64])
+
+            predictedValues = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_predicted.csv",
+                nullable=false, types=vcat([Int64, Int64, Int64],fill(Float64,10)))
+
+
+            for t = 1:845
+                if sign(predictedValues[t,3+bestGamma]) == sign(realValues[t,4])
+                    for pt = 1:10
+                        if tempMat[t,pt] != 0
+                            avgCorrectUsage[j,pt] += 1
+                        end
+                    end
+                end
+            end
+
+            testMat += Array(tempMat)[:,1:10]
+        end
+
+        testMat = testMat/1
+        testMat[find(testMat)] = 1
+
+        for k = 1:10
+            avgUsage[j,k] = countnz(testMat[:,k])/845
+        end
+    end
+
+    avgCorrectUsage = avgCorrectUsage/845
+
+    avgCorrectUsagePercent = zeros(10,10)
+    for i=1:10
+        for j=1:10
+            avgCorrectUsagePercent[i,j] = avgCorrectUsage[i,j]/avgUsage[i,j]
+        end
+    end
+    # 1.959964 --> 0.95
+    # 2.575829 --> 0.99
+    # 3.290527 --> 0.999
+    writedlm(path*"ParametersAnalysis/RawIndustryCorrectUsage.csv",avgCorrectUsagePercent,",")
+end
+
+getMacroTimeTA()
+function getMacroTimeTA()
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    avgUsage = zeros(10,35)
+    signifMat = Array{String}(10,35)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,359)
+        for i = 14
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat += Array(tempMat)
+            # 10 industries predicting 10 industries
+        end
+        testMat[find(testMat)] = 1
+
+        for k = 1:27
+            for t = 0:12
+                avgUsage[j,k] += countnz(testMat[:,k+27*t])/845
+            end
+        end
+
+        for k = 28:35
+            avgUsage[j,k] = countnz(testMat[:, end-35+k])/845
+        end
+    end
+
+    realmean = mean(avgUsage)
+    realStd = std(avgUsage)
+    for j = 1:10
+        for k = 1:35
+            z_score = (avgUsage[j,k]-realmean)/(realStd)
+            if z_score > 3.090232306
+                signifMat[j,k] = "***"
+            elseif z_score > 2.326347874
+                signifMat[j,k] = "**"
+            elseif z_score > 1.644853627
+                signifMat[j,k] = "*"
+            else
+                signifMat[j,k] = " "
+            end
+        end
+    end
+
+    println(signifMat)
+    println(avgUsage)
+
+    writedlm(path*"ParametersAnalysis/MacroTimeTAAverageSignif.csv",signifMat,",")
+    writedlm(path*"ParametersAnalysis/MacroTimeTAAverageUsage.csv",avgUsage,",")
+end
+
+getMacroTimeTAMostUsedVariables()
+function getMacroTimeTAMostUsedVariables()
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    avgUsage = zeros(13,27)
+    signifMat = Array{String}(13,27)
+
+    allMat = zeros(845,359)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,359)
+        for i = 14
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat += Array(tempMat)
+            # 10 industries predicting 10 industries
+        end
+        testMat[find(testMat)] = 1
+
+        allMat += testMat
+
+        #find(x -> x>0.9, mean(testMat,1))
+
+        for k = 1:27
+            for t = 0:12
+                avgUsage[t+1,k] += countnz(testMat[:,k+27*t])/845
+            end
+        end
+    end
+
+    allMat = allMat/10
+    allMatMean = mean(allMat,1)
+    mean(allMatMean)
+    std(allMatMean)
+
+    stepVector = zeros(10001,3)
+    for i = 0:10000
+        stepVector[i+1,1] = i/10000
+        x = length(find(x-> x <= i/10000, mean(allMat,1)))
+        stepVector[i+1,3] = x
+        y = length(find(x-> x >= i/10000 && x < (i+1)/10000, mean(allMat,1)))
+        stepVector[i+1,2] = y
+    end
+    writedlm(path*"ParametersAnalysis/MacroTimeTAParameterDistribution.CSV",stepVector,",")
+
+    x = find(x-> x< 0.05 && x>0.01, mean(allMat,1))
+    x = find(x-> x> 0.33, mean(allMat,1))
+
+    for i=x
+        if floor(i/27) < 13
+            println("T",Int64(floor(i/27)),", ",i%27)
+        else
+            println("TA term ",i%27)
+        end
+    end
+    mean(allMat,1)[x]
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+rawInputUsage()
+#NoDur is clearly the strongest predictor and also shows the strongest prediction power in recent terms
+function rawInputUsage()
+    println("Predicting dataset ",industryArr[j])
+    industryCounter = zeros(845,10)
+    for t = 1:845
+        for curIndustry = 1:10
+            for dataset = 1:10
+                if testMat[dataset][t,curIndustry] != 0
+                    industryCounter[t,curIndustry] += 1
+                end
+            end
+        end
+    end
+    industryCounter = industryCounter/10
+
+    avgUsage = mean(industryCounter,1)
+    for i=1:10
+        println(industryArr[i], " is used \t", round(avgUsage[i],3),"% of the time across all datasets")
+    end
+    println()
+
+    avgUsageIfActive = zeros(1,10)
+    for curIndustry = 1:10
+        iter = 0
+        for t = 1:845
+            if industryCounter[t,curIndustry] != 0
+                iter += 1
+                avgUsageIfActive[1,curIndustry] += industryCounter[t,curIndustry]
+            end
+        end
+        avgUsageIfActive[1,curIndustry] = avgUsageIfActive[1,curIndustry]/iter
+    end
+
+    for i=1:10
+        println(industryArr[i], " is used \t", round(avgUsageIfActive[i],3),"% of the time across all datasets when it's active")
+    end
+
+    #Create label rowvector
+    industryArr2 = Array{String}(1,10)
+    for i = 1:10
+        industryArr2[1,i] = industryArr[i]
+    end
+
+    # Graph it
+    plotlyjs()
+    plot(industryCounter, title="Industry Overview", linewidth=2, label=industryArr2, yaxis=("% used in period t",(0,1),0:0.1:1),xaxis=("Months",0:100:845))
+end
+
 getRawTime()
 function getRawTime()
     avgUsage = zeros(10,10)
@@ -215,6 +421,129 @@ function getRawTime()
     # 3.290527 --> 0.999
     writedlm(path*"ParametersAnalysis/RawTimeIndustryAverageSignif.csv",signifMat,",")
     writedlm(path*"ParametersAnalysis/RawTimeIndustryAverageUsage.csv",avgUsage,",")
+end
+
+getRawExp()
+function getRawExp()
+    avgUsage = zeros(10,10)
+    signifMat = Array{String}(10,10)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,10)
+        for i = 3
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = bSolveMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat = Array(tempMat)
+            # 10 industries predicting 10 industries
+        end
+        countnz(testMat[8,:])
+        testMat[find(testMat)] = 1
+
+        for k = 1:10
+            avgUsage[j,k] = countnz(testMat[:,[k,k+10,k+20,k+30]])/845
+        end
+    end
+
+    realmean = mean(avgUsage)
+    realStd = std(avgUsage)
+    for j = 1:10
+        for k = 1:10
+            z_score = (avgUsage[j,k]-realmean)/(realStd)
+            if z_score > 3.090232306
+                signifMat[j,k] = "***"
+            elseif z_score > 2.326347874
+                signifMat[j,k] = "**"
+            elseif z_score > 1.644853627
+                signifMat[j,k] = "*"
+            else
+                signifMat[j,k] = " "
+            end
+        end
+    end
+
+    println(signifMat)
+    println(avgUsage)
+
+    # 1.959964 --> 0.95
+    # 2.575829 --> 0.99
+    # 3.290527 --> 0.999
+    writedlm(path*"ParametersAnalysis/RawExpIndustryAverageSignif.csv",signifMat,",")
+    writedlm(path*"ParametersAnalysis/RawExpIndustryAverageUsage.csv",avgUsage,",")
+end
+
+getRawTimeExp()
+function getRawExp()
+    avgUsage = zeros(10,10)
+    signifMat = Array{String}(10,10)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,10)
+        for i = 7
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = bSolveMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat = Array(tempMat)[:,:]
+            # 10 industries predicting 10 industries
+        end
+        countnz(testMat[8,:])
+        testMat[find(testMat)] = 1
+
+        lRange = vcat(Array{Int64}(15:15+11),Array{Int64}(28:28+11),Array{Int64}(41:41+11))
+
+
+        for k = 1:10
+            for l = lRange
+                avgUsage[j,k] += countnz(testMat[:,[k+10*(l-1)]])/845
+            end
+        end
+    end
+
+    realmean = mean(avgUsage)
+    realStd = std(avgUsage)
+    for j = 1:10
+        for k = 1:10
+            z_score = (avgUsage[j,k]-realmean)/(realStd)
+            if z_score > 3.090232306
+                signifMat[j,k] = "***"
+            elseif z_score > 2.326347874
+                signifMat[j,k] = "**"
+            elseif z_score > 1.644853627
+                signifMat[j,k] = "*"
+            else
+                signifMat[j,k] = " "
+            end
+        end
+    end
+
+    println(signifMat)
+    println(avgUsage)
+
+    # 1.959964 --> 0.95
+    # 2.575829 --> 0.99
+    # 3.290527 --> 0.999
+    writedlm(path*"ParametersAnalysis/RawTimeExpRawTimeExpIndustryAverageSignif.csv",signifMat,",")
+    writedlm(path*"ParametersAnalysis/RawTimeExpRawTimeExpIndustryAverageUsage.csv",avgUsage,",")
 end
 
 getMacro()
@@ -491,18 +820,3 @@ end
     # Are non linear transformation of times series used?
     # Are any of the raw inputs always used?
     # Is VIX actually used?
-
-
-# Common parameters within 1 dataset across industries over time. Loop over industries
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
-#Fetch summary file
-summary = CSV.read(path*industryArr[i]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
-
-#Fetch dataset from summary
-fileName = summary[i,1]
-
-#Fetch best gamma from summary, based on R^2
-bestGamma = summary[i,7]
-
-#Fetch bSolved matrix
-CSV.read(path*industryArr[i]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*bestGamma*".csv", nullable=false, header=false, datarow=1)

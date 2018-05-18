@@ -18,7 +18,7 @@ println("Leeeeroooy Jenkins")
 inputArg1 = parse(Int64, ARGS[1])
 inputArg2 = parse(Int64, ARGS[2])
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
 trainingSize = 240

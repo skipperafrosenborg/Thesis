@@ -13,8 +13,8 @@ println("Leeeeroooy Jenkins")
 #Esben's path
 #path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexData"
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
 trainingSize = 240
 possibilities = 5
@@ -31,7 +31,6 @@ for i=2:industriesTotal
     modelMatrix[i, :] = noDurModel
 end
 
-
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
 
@@ -43,7 +42,6 @@ SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 lambdaValues = log.(logspace(100, SSTO/2, nGammas))
 nRows = size(standY)[1]
 amountOfModels = nGammas^4
-
 
 modelConfig = zeros(amountOfModels, 4)
 counter = 1
@@ -79,15 +77,15 @@ rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
 
 
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
-path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/RFR/VIXTimeTA2.4/"
+#path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
 weightsPerfect = Array{Float64}(CSV.read(path*"weightsPerfect.csv",header=false, datarow=1, nullable=false))
 returnPerfectMatrix = Array{Float64}(CSV.read(path*"returnPerfectMatrix.csv", header=false, datarow=1, nullable=false))
 
 for i = 1:5
     for j = 0:24
         #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
-        path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
+        #path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
         PMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_PMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
         return1NMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_return1NMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
         returnCEOMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_returnCEOMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
@@ -136,7 +134,7 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
+            return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11]     = wStar
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
@@ -168,7 +166,7 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar = performMVOptimization(expectedReturns, U, gamma, valY, valY)
+            return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11]     = wStar
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
@@ -182,6 +180,6 @@ end
 combinedPortfolios = hcat(returnPerfectMatrix[1:nRows-trainingSize-2, 1], return1NMatrix[1:nRows-trainingSize-2, 1],
     returnCEOMatrix[1:nRows-trainingSize-2, Array{Int64}(bestModelIndexes)], PMatrix[1:nRows-trainingSize-2, Array{Int64}(bestModelIndexes)])
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
-path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
+path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
 writedlm(path*string(inputArg1)*"_returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
 println("Finished Everything")
