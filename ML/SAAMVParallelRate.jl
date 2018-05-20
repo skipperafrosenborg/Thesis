@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 12
+trainingSize = 120
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
@@ -62,8 +62,8 @@ endPoint = 1080 #201607
 for g = 1:10
     fileName = "Results"
     gammaRisk = riskAversions[g] #riskAversion in MV optimization
-    total = nRows-trainingSize-1
-    for t = 1:840 #(startPoint-trainingSize):(endPoint-trainingSize)
+    total = endPoint-trainingSize
+    for t = (startPoint-trainingSize):(endPoint-trainingSize)
         println("time $t / $total, gammaRisk $g / 10 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
         expectedReturns = zeros(industriesTotal+1)
