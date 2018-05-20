@@ -150,7 +150,13 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
 
         for m = 1:bestModelAmount
             expectedReturns = zeros(11)
-            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma))
+            #CHANGES
+            rfRatesVec = rfRates[t:(t+trainingSize-1)]
+            betaArray, U = @time(runCEORFR(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma, rfRatesVec))
+
+            ##PREVIOUS
+            #betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma))
+            
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
             expectedReturns[11] = rfRates[t+trainingSize]
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
