@@ -246,6 +246,89 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
     return betaArray, U
 end
 
+function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRatesVec)
+    industriesTotal = 10
+    periodMean = zeros(11)
+    for i = 1:11
+        periodMean[i] = mean(trainX[:,i])
+    end
+
+    l1, l2, l3, l4 = modelConfigRow
+
+    maxPredictors = 1412
+    bCols = floor.(Int,zeros(industriesTotal))
+    trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+    Sigma =  cov(trainX)
+
+    #A=U^(T)U where U is upper triangular with real positive diagonal entries
+    F = lufact(Sigma)
+    U = F[:U]  #Cholesky factorization of Sigma
+
+    for i = 1:industriesTotal
+        bCols[i] = size(trainingXArrays[i])[2]
+    end
+    gamma = gamma
+    bRows = size(trainingXArrays[1])[1]
+    M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0, Threads=1))
+
+    @variables M begin
+            b[1:industriesTotal, 1:maxPredictors] #Beta in LASSO; industry i and predictors 1:1412
+            z[1:industriesTotal, 1:maxPredictors] #auxilliary for 1norm
+            q[1:industriesTotal] #auxilliary for norm
+            f[1:(industriesTotal+1), 1:bRows] #expected return for industry i at time t
+            w[1:(industriesTotal+1), 1:bRows] #weights for industry i at time t
+            y[1:bRows] #auxilliary variables for MV optimization
+    end
+
+    #@objective(M,Min,sum(0.5*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-f[:,t]'*w[:,t] for t=1:bRows)) - l4*(sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
+
+    @objective(M,Min,sum(l1*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-sum(f[i,t] for i=1:11) for t=1:bRows)) - l4*(sum(w[11,t]*rfRatesVec[t] for t=1:bRows) + sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
+
+    for i = 1:(industriesTotal+1)
+        for t = 1:bRows
+            @constraint(M, (periodMean[i]+1000)*w[i,t] >= f[i,t])
+        end
+    end
+    for i = 1:industriesTotal
+        @constraint(M, norm( [1-q[i];2*(trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])] ) <= 1+q[i]) #second order cone constraint SOC
+    end
+    @constraint(M,  b .<= z)
+    @constraint(M, -z .<= b)
+
+
+    for i = 1:10
+        errorArray = (trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
+        errorSum = sum(errorArray)
+        for t = 1:bRows
+            prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
+            @constraint(M, prediction + errorSum >= f[i, t]) ##== originally
+        end
+    end
+    #RFR
+    for t = 1:bRows
+        @constraint(M, rfRatesVec[t] >= f[11, t])
+    end
+
+    @constraint(M, 0 .<= w)
+    for t = 1:bRows
+        @constraint(M, sum(w[i,t] for i=1:(industriesTotal+1)) == 1)
+        @constraint(M, norm([2*U'*w[:,t];y[t]-1]) <= y[t]+1)
+    end
+
+    @time(solve(M))
+    betaArray = getvalue(b)
+    #Insert shrinking here
+    return betaArray, U
+end
+
+
+
+
+
+
+
+
+
 
 function generateXandYs(industries, modelMatrix)
     industriesTotal = length(industries)
