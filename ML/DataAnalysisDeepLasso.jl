@@ -303,7 +303,197 @@ function getMacroTimeTAMostUsedVariables()
     mean(allMat,1)[x]
 end
 
+getVixMacroTimeTA()
+function getVixMacroTimeTA()
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    avgUsage = zeros(10,36)
+    signifMat = Array{String}(10,36)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,372)
+        for i = 22
+            #Fetch dataset from summary
+            fileName = summary[i,1]
 
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat += Array(tempMat)
+            # 10 industries predicting 10 industries
+        end
+        testMat[find(testMat)] = 1
+
+        for k = 1:28
+            for t = 0:12
+                avgUsage[j,k] += countnz(testMat[:,k+27*t])/845
+            end
+        end
+
+        for k = 29:36
+            avgUsage[j,k] = countnz(testMat[:, end-36+k])/845
+        end
+    end
+
+    realmean = mean(avgUsage)
+    realStd = std(avgUsage)
+    for j = 1:10
+        for k = 1:36
+            z_score = (avgUsage[j,k]-realmean)/(realStd)
+            if z_score > 3.090232306
+                signifMat[j,k] = "***"
+            elseif z_score > 2.326347874
+                signifMat[j,k] = "**"
+            elseif z_score > 1.644853627
+                signifMat[j,k] = "*"
+            else
+                signifMat[j,k] = " "
+            end
+        end
+    end
+
+    println(signifMat)
+    println(avgUsage)
+
+    writedlm(path*"ParametersAnalysis/VIXMacroTimeTAAverageSignif.csv",signifMat,",")
+    writedlm(path*"ParametersAnalysis/VIXMacroTimeTAAverageUsage.csv",avgUsage,",")
+end
+
+getVixPeriodMacroTimeTA()
+function getVixPeriodMacroTimeTA()
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    avgUsage = zeros(10,36)
+    signifMat = Array{String}(10,36)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(323,372)
+        for i = 22
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat += Array(tempMat)[end-322:end,:]
+            # 10 industries predicting 10 industries
+        end
+        testMat[find(testMat)] = 1
+
+        for k = 1:28
+            for t = 0:12
+                avgUsage[j,k] += countnz(testMat[:,k+27*t])/323
+            end
+        end
+
+        for k = 29:36
+            avgUsage[j,k] = countnz(testMat[:, end-36+k])/323
+        end
+    end
+
+    realmean = mean(avgUsage)
+    realStd = std(avgUsage)
+    for j = 1:10
+        for k = 1:36
+            z_score = (avgUsage[j,k]-realmean)/(realStd)
+            if z_score > 3.090232306
+                signifMat[j,k] = "***"
+            elseif z_score > 2.326347874
+                signifMat[j,k] = "**"
+            elseif z_score > 1.644853627
+                signifMat[j,k] = "*"
+            else
+                signifMat[j,k] = " "
+            end
+        end
+    end
+
+    println(signifMat)
+    println(avgUsage)
+
+    writedlm(path*"ParametersAnalysis/VIXPeriodMacroTimeTAAverageSignif.csv",signifMat,",")
+    writedlm(path*"ParametersAnalysis/VIXPeriodMacroTimeTAAverageUsage.csv",avgUsage,",")
+end
+
+getVixMacroTimeTAMostUsedVariables()
+function getVixMacroTimeTAMostUsedVariables()
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    avgUsage = zeros(13,28)
+    signifMat = Array{String}(13,28)
+
+    allMat = zeros(845,372)
+    for j = 1:10
+        println("Predicting industry ", industryArr[j])
+        summary = CSV.read(path*industryArr[j]*"/"*"Summary "*string(trainingSize)*".csv", nullable=false)
+        testMat = zeros(845,372)
+        for i = 22
+            #Fetch dataset from summary
+            fileName = summary[i,1]
+
+            #Fetch best gamma from summary, based on R^2
+            bestGamma = summary[i,7]
+
+            nPredictionTerms = [10, 18, 40, 48, 130, 138, 520, 528, 27, 35, 108, 116, 351, 359, 1404, 1412, 28, 36, 112, 120, 364, 372, 1456, 1464]
+
+            #Fetch bSolved matrix
+            tempMat = CSV.read(path*industryArr[j]*"/"*string(trainingSize)*"-1/240_"*fileName*"_bMatrix240_"*string(bestGamma)*".csv",
+                nullable=false, header=false, datarow=1, types=fill(Float64,nPredictionTerms[i]))
+
+            testMat += Array(tempMat)
+            # 10 industries predicting 10 industries
+        end
+        testMat[find(testMat)] = 1
+
+        allMat += testMat
+
+        #find(x -> x>0.9, mean(testMat,1))
+
+        for k = 1:28
+            for t = 0:12
+                avgUsage[t+1,k] += countnz(testMat[:,k+27*t])/845
+            end
+        end
+    end
+
+    allMat = allMat/10
+    allMatMean = mean(allMat,1)
+    mean(allMatMean)
+    std(allMatMean)
+
+    stepVector = zeros(10001,3)
+    for i = 0:10000
+        stepVector[i+1,1] = i/10000
+        x = length(find(x-> x <= i/10000, mean(allMat,1)))
+        stepVector[i+1,3] = x
+        y = length(find(x-> x >= i/10000 && x < (i+1)/10000, mean(allMat,1)))
+        stepVector[i+1,2] = y
+    end
+    writedlm(path*"ParametersAnalysis/VIXMacroTimeTAParameterDistribution.CSV",stepVector,",")
+
+    x = find(x-> x< 0.05 && x>0.01, mean(allMat,1))
+    x = find(x-> x> 0.33, mean(allMat,1))
+
+    for i=x
+        if floor(i/28) < 13
+            println("T",Int64(floor(i/28)),", ",i%28)
+        else
+            println("TA term ",i%28)
+        end
+    end
+    mean(allMat,1)[x]
+end
 
 
 
