@@ -248,10 +248,6 @@ end
 
 function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRatesVec)
     industriesTotal = 10
-    periodMean = zeros(11)
-    for i = 1:11
-        periodMean[i] = mean(trainX[:,i])
-    end
 
     l1, l2, l3, l4 = modelConfigRow
 
@@ -259,6 +255,11 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
     bCols = floor.(Int,zeros(industriesTotal))
     trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
     Sigma =  cov(trainX)
+
+    periodMean = zeros(11)
+    for i = 1:11
+        periodMean[i] = mean(trainX[:,i])
+    end
 
     #A=U^(T)U where U is upper triangular with real positive diagonal entries
     F = lufact(Sigma)

@@ -29,22 +29,21 @@ println("y = ", getvalue(y))
 using StatsBase
 using DataFrames
 using CSV
-
-
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CPU/"
+using JuMP
+include("SupportFunction.jl")
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/WineQualityRed/"
 cd(path)
 
-dataT = [Float64]
-for j = 1:29
-    dataT = vcat(dataT, Float64)
-end
+nCols = 50
 
-totalLog = zeros(30,30)
+totalLog = zeros(30,nCols)
+
+fName = "WineQualityRed"
 
 for i = 1:10
     println(i)
     mainData = Array(CSV.read("Data/"*string(i)*"Xtrain.csv", delim = ',', nullable=false))
-    best3Beta = CSV.read(string(i)*"_CPU.csv", delim = ',', nullable=false, types = dataT)
+    best3Beta = CSV.read(string(i)*"_"*fName*".csv", delim = ',', nullable=false, types = fill(Float64,nCols), header=false, datarow=2)
 
     best3BetaArr = Array(best3Beta)
 
@@ -52,29 +51,29 @@ for i = 1:10
     best3Beta[2,1] = findMaxCor(mainData, best3BetaArr[2,7:end])
     best3Beta[3,1] = findMaxCor(mainData, best3BetaArr[3,7:end])
 
-    CSV.write(string(i)*"_CPU.csv", best3Beta)
+    CSV.write(string(i)*fName*".csv", best3Beta)
 
     totalLog[1+(i-1)*3:3+(i-1)*3,:]= Array(best3Beta)
 end
 
 writedlm("TotalLog.csv", totalLog, ",")
 
-lassoBestK = zeros(24,30)
-lassoSummary = zeros(24,30)
-totalLog = zeros(30,29)
+lassoBestK = zeros(nCols,nCols)
+lassoSummary = zeros(nCols,nCols)
+totalLog = zeros(30,nCols-1)
 
 dataT = [Float64]
-for j = 1:28
+for j = 1:nCols-2
     dataT = vcat(dataT, Float64)
 end
 
 for i = 1:10
     println(i)
     mainData = Array(CSV.read("Data/"*string(i)*"Xtrain.csv", delim = ',', nullable=false))
-    dataInput = CSV.read(string(i)*"_LassoCPU.csv", delim = ',', nullable=false, types = dataT)
+    dataInput = CSV.read(string(i)*"_Lasso"*fName*".csv", delim = ',', nullable=false, types = dataT, datarow=2, header=false)
 
     dataInputArr = Array{Float64}(dataInput)
-    for j = 1:24
+    for j = 1:nCols
         #println("j = ",j)
         lassoBestK[j,1] = j
         lassoSummary[j,1] = j

@@ -6,7 +6,7 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-dataSet = "VIXTimeTA2.4/"
+dataSet = "VixTimeTA0.0/"
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/RFR/"*dataSet
 cd(path)
