@@ -1,11 +1,9 @@
-##### MEAN-VARIANCE OPTIMIZATION
-#This is not supposed to produce great results, since mean and covariance
-#is supposed to be very exact before good weights are found
 using JuMP
 using Gurobi
 using StatsBase
 using DataFrames
 using CSV
+using Distributions
 include("SupportFunction.jl")
 include("DataLoad.jl")
 include("CEOSupportFunctions.jl")
@@ -55,13 +53,13 @@ for l1 = 1:nGammas
     for l2 = 1:nGammas
         for l3 = 1:nGammas
             for l4 = 1:nGammas
-                modelConfig[counter,:] = [rand(Uniform(1,100),1) rand(Uniform(10,10000)) rand(Uniform(1,100)) rand(Uniform(1,10000))]
+                modelConfig[counter,:] = [rand(Uniform(1,100)) rand(Uniform(10,10000)) rand(Uniform(1,100)) rand(Uniform(1,10000))]
                 counter += 1
             end
         end
     end
 end
-modelConfig
+
 
 #Initialization of parameters
 w1N = repeat([1/11], outer = 11) #1/N weights
