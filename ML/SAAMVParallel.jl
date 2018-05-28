@@ -2,6 +2,8 @@ using StatsBase
 using DataFrames
 using CSV
 
+#The outcommented codes are due to it being run on the HPC or a local pc
+
 #trainingSizeInput = parse(Int64, ARGS[1])
 trainingSize = 12
 
@@ -18,14 +20,6 @@ println("Leeeeroooy Jenkins")
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
-#=
-VIX = 1
-raw = 0
-expTrans = 1
-timeTrans = 1
-TA = 1
-trainingSize = 48
-=#
 possibilities = 5
 industries = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 industriesTotal = length(industries)

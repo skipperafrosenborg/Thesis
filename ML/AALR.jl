@@ -136,7 +136,6 @@ warmstartZ = []
 startIter = 1
 
 bigM = 100
-tau = 2
 
 stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30))
 SSTO = sum((standY[i]-mean(standY))^2 for i=1:length(standY))

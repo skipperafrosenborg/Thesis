@@ -3,7 +3,7 @@ using DataFrames
 using CSV
 
 #trainingSizeInput = parse(Int64, ARGS[1])
-trainingSize = 120
+trainingSize = 12
 
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
@@ -42,7 +42,7 @@ path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
 
-riskAversions = linspace(0, 2.4, 10)
+riskAversions = linspace(0, 4, 16)
 XArrays, YArrays = generateXandYs(industries, modelMatrix)
 
 nRows = size(XArrays[1])[1]
@@ -51,7 +51,8 @@ return1NMatrix = zeros(nRows-trainingSize)
 returnSAAMatrix = zeros(nRows-trainingSize)
 
 weightsSAA = zeros(nRows-trainingSize, 11)
-forecastRows = zeros(nRows-trainingSize, 11)
+expectedReturnMatrix = zeros(nRows-trainingSize, 11)
+forecastErrors = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
@@ -59,18 +60,20 @@ startPoint = 241 #194608
 endPoint = 1080 #201607
 
 
-for g = 1:10
+for g = 1:length(riskAversions)
     fileName = "Results"
     gammaRisk = riskAversions[g] #riskAversion in MV optimization
     total = endPoint-trainingSize
     for t = (startPoint-trainingSize):(endPoint-trainingSize)
-        println("time $t / $total, gammaRisk $g / 10 ")
+        println("time $t / $total, gammaRisk $g / 16 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
         expectedReturns = zeros(industriesTotal+1)
         for i=1:10
             expectedReturns[i] = mean(trainingYArrays[i][:])
         end
         expectedReturns[11] = rfRates[t+trainingSize]
+        expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+
         rfRatesVec = rfRates[t:(t+trainingSize-1)]
         trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
         Sigma =  cov(trainX)
@@ -87,13 +90,15 @@ for g = 1:10
         valY[11] = rfRates[t+trainingSize]
         return1N, returnSAA, wSAA, forecastRow = performMVOptimizationRISK(expectedReturns[:], U, gammaRisk, valY, valY)
         weightsSAA[t, 1:11]    = wSAA
-        forecastRows[t, 1:11]  = forecastRow
+        forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
         return1NMatrix[t]      = return1N
         returnSAAMatrix[t]     = returnSAA
     end
     fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
     writedlm(fileName*"SAARFRWeights.csv", weightsSAA,",")
     writedlm(fileName*"SAARFRReturns.csv", returnSAAMatrix,",")
+    writedlm(fileName*"SAARFRErrors.csv", forecastErrors,",")
+    writedlm(fileName*"SAARFRForecasts.csv", expectedReturnMatrix,",")
     #writedlm(fileName*"SAARFR1N.csv", return1NMatrix,",")
 end
 

@@ -49,11 +49,15 @@ returnPPDMatrix = zeros(nRows-trainingSize)
 weightsPPD = zeros(nRows-trainingSize, 11)
 forecastRows = zeros(nRows-trainingSize, 11)
 
+expectedReturnMatrix = zeros(nRows-trainingSize, 11)
+forecastErrors = zeros(nRows-trainingSize, 11)
+
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
 
 
 #GENERATING PERFECT RESULTS WITHOUT RISK FREE RATE
+#=
 returnPerfectMatrix = zeros(nRows-trainingSize)
 weightsPerfect = zeros(nRows-trainingSize, 10)
 path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/PerfectReturns/"
@@ -73,7 +77,7 @@ for g = 1:10
     writedlm(fileName*"Weights.csv", weightsPerfect,",")
     writedlm(fileName*"Returns.csv", returnPerfectMatrix,",")
 end
-
+=#
 #GENERATING PERFECT RESULTS WITH RISK FREE RATE
 returnPerfectMatrix = zeros(nRows-trainingSize)
 weightsPerfect = zeros(nRows-trainingSize, 11)
@@ -97,7 +101,7 @@ for g = 1:10
     writedlm(fileName*"Weights.csv", weightsPerfect,",")
     writedlm(fileName*"Returns.csv", returnPerfectMatrix,",")
 end
-a
+
 
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
@@ -126,6 +130,16 @@ for g = 1:10
         end
         expectedReturns
         expectedReturns[11] = rfRates[t+trainingSize]
+
+        expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+        #=
+        #Economic constraint; only focus on positive expected returns
+        for i = 1:10
+            if expectedReturns[i] < 0
+                expectedReturns[i] = 0
+            end
+        end
+        =#
         rfRatesVec = rfRates[t:(t+trainingSize-1)]
         trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
         Sigma =  cov(trainX)
@@ -142,14 +156,16 @@ for g = 1:10
         valY[11] = rfRates[t+trainingSize]
         return1N, returnPPD, wPPD, forecastRow = performMVOptimizationRISK(expectedReturns, U, gammaRisk, valY, valY)
         weightsPPD[t, 1:11]    = wPPD
-        forecastRows[t, 1:11]  = forecastRow
+        forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
         return1NMatrix[t]      = return1N
         returnPPDMatrix[t]     = returnPPD
     end
     fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
     writedlm(fileName*"ppdRFRWeights.csv", weightsPPD,",")
     writedlm(fileName*"ppdRFRReturns.csv", returnPPDMatrix,",")
-    writedlm(fileName*"ppdRFR1N.csv", return1NMatrix,",")
+    #writedlm(fileName*"ppdRFR1N.csv", return1NMatrix,",")
+    writedlm(fileName*"ppdRFRErrors.csv", forecastErrors,",")
+    writedlm(fileName*"ppdRFRForecasts.csv", expectedReturnMatrix,",")
 end
 
 

@@ -448,8 +448,63 @@ outputX = originalData[1:(outputRows-1),]
 predictionTime = data$YM[2:outputRows] #dates are the date of the Y variable, so we predict january '12, but have december '11 info available
 outputData = cbind(outputX, PredDataOutput, VIX, outputY, predictionTime, RecessionData$Recession)
 
+
+
 write.table(outputData, file = "monthlyNoDurLOGReturn2.csv", col.names = FALSE, row.names = F, sep = ",")
 
 
 ## write table of risk free rate
 write.table(outputData[,20], file = "riskFreeRate.csv", col.names = FALSE, row.names = F, sep = ",")
+
+
+#SIGNS OF PREDICTOR TERMS
+model = lm(outputData$outputY ~ outputData$D12Diff)
+summary(model) #not significant
+
+model = lm(outputData$outputY ~ outputData$csp)
+summary(model) #95% significant, positive
+
+model = lm(outputData$outputY ~ outputData$corpr)
+summary(model) #99.9% significant, positive
+
+model = lm(outputData$outputY ~ outputData$infl)
+summary(model) #90% significant, negative
+
+model = lm(outputData$outputY ~ outputData$b.m)
+summary(model) #99.9% significant, positive
+
+model = lm(outputData$outputY ~ outputData$Rfree)
+summary(model) #not significant
+
+model = lm(outputData$outputY ~ outputData$svar)
+summary(model) #not significant
+
+model = lm(outputData$outputY[764:outputRows] ~ outputData$VIX[764:outputRows])
+summary(model) #not significant
+
+model = lm(outputData$outputY ~ outputData$Utils)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Shops)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Telcm)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Manuf)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$NoDur)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Enrgy)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$HiTec)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Other)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+model = lm(outputData$outputY ~ outputData$Durbl)
+summary(model) #99.9% significant, positive - noDur is the one to predict currently

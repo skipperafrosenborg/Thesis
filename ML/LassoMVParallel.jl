@@ -81,6 +81,10 @@ for g = 1:10
         F = lufact(Sigma)
         U = F[:U]  #Cholesky factorization of Sigma
 
+
+
+
+
         #getting the actual Y values for each industry
         valY = zeros(10)
         for i = 1:10
