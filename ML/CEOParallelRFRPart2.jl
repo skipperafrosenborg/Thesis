@@ -41,7 +41,7 @@ standY = YArrays[1]
 SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 lambdaValues = log.(logspace(100, SSTO/2, nGammas))
 
-lambda4Values = [1e2,1e3,1e4,1e5]
+lambda4Values = [1e4,1e5,1e6,1e7,1e8]
 
 nRows = size(standY)[1]
 amountOfModels = nGammas^4
@@ -52,8 +52,8 @@ for l1 = 1:nGammas
     for l2 = 1:nGammas
         for l3 = 1:nGammas
             for l4 = 1:nGammas
-                modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambdaValues[l4]]
-                #modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambda4Values[l4]]
+                #modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambdaValues[l4]]
+                modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambda4Values[l4]]
                 counter += 1
             end
         end

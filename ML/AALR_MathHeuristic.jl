@@ -1,29 +1,36 @@
+#Load Packages
 using JuMP
 using Gurobi
 using StatsBase
 using DataFrames
 using CSV
-using Bootstrap #External packages, must be added
-using JLD
+using Bootstrap
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
+### Set path ###
 #Esben's path
 #cd("$(homedir())/Documents/GitHub/Thesis/Data")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff"
+
 #HPC path
-path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data"
+#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+
+### Load data ###
 #mainData = loadIndexDataNoDur(path)
-mainData = loadIndexDataNoDurLOGReturn(path)
+mainData = loadIndexDataLOGReturn("NoDur", path)
 path = "/zhome/9f/d/88706/SpecialeCode/Results/IndexData/SpeedTest/"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/SpeedTest/"
 
 #Reset HPC path
 #path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
 #cd(path)
+
+# Split data
 dateAndReseccion = Array(mainData[:,end-1:end])
 mainDataArr = Array(mainData[:,1:end-2])
 
@@ -38,21 +45,22 @@ mainYarr = mainDataArr[:, nCols:nCols]
 # Transform with time elements
 mainXarr = expandWithTime3612(mainXarr)
 
-# Transform #
+# Transform with non linear expansions and techincal indicators
 mainXarr = expandWithTransformations(mainXarr)
 mainXarr = expandWithMAandMomentum(mainXarr, mainYarr, (nCols-1))
 
-# Standardize
+# Standardize data
 standX = zScoreByColumn(mainXarr)
-standY = zScoreByColumn(mainDataArr[:, nCols:nCols])
+standY = mainDataArr[:, nCols:nCols]
 allData = hcat(standX, standY)
 bCols = size(standX)[2]
 nRows = size(standX)[1]
 
-nGammas = 5
+# Set prediction parameters
 trainingSize = 12
 predictions = 1
 testRuns = nRows-trainingSize-predictions
+
 
 Xtrain = allData[:, 1:bCols]
 trainingData = Xtrain[:,1:nCols-1]
@@ -91,16 +99,14 @@ println("Objective value kMax: ", getobjectivevalue(m))
 kmax = getobjectivevalue(m)
 
 println("STAGE 1 DONE")
-
+# Initialise arrays
 amountOfGammas = 5
-solArr = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
 realArr = zeros((nRows-trainingSize-predictions), 1)
 ISRSquared = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas)
 bSolMatrix = zeros((nRows-trainingSize-predictions), kmax*amountOfGammas, bCols)
 
 ### STAGE 2 ###
 println("STAGE 2 INITIATED")
-
 #Initialise values for check later
 bSolved = []
 bestBeta = []
@@ -110,15 +116,15 @@ bigM = 10
 gammaArray = log10.(logspace(0.001, 5, amountOfGammas))
 
 function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
+    # Initialise values
     best3Beta = zeros(3,bCols+3)
     gammaArray = log10.(logspace(0.01, 5, 3))
-    bestObjtives = zeros(kmax, length(gammaArray))
-	#println("Solving for all k and gamma")
-    println("Warmstart = ",warmstart)
-	#allColNames = expandedColNamesToString(colNames)
+    println("Remember to check gammaArray line 121")
     bSolved = zeros(bCols,1)
-    #SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
-    #gammaArray = log10.(logspace(0.001, SSTO, amountOfGammas))
+    bestObjtives = zeros(kmax, length(gammaArray))
+    println("Warmstart = ",warmstart)
+
+
     HC = cor(standX)
 	for i in 1:kmax
         if warmstart == true
@@ -141,6 +147,7 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
 
         	@variable(stage2Model, v[1:bCols], start = 0) # auxiliary variables for abs
 
+            # Set warmstart values
             if warmstart == true
                 for j in find(bSolved)
     				setvalue(b[j], bSolved[j])
@@ -222,7 +229,6 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
             prediction = standXVali*bSolved
 
 			println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g \t obj = $obj, bound = $bound, gap = $gap")
-            solArr[r,Int64((i-1)*amountOfGammas+g)] = prediction[1]
             realArr[r,1] = standYVali[1]
 
 		end
@@ -230,11 +236,165 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
 	end
     println(warmstart)
     return bestObjtives
-	#return #best3Beta, solArr, model
+	#return #best3Beta, model
 end
 
+function solveAndLogForAllKHeuristics(kmax, standXVali, standYVali, r)
+    # Initialise values
+    best3Beta = zeros(3,bCols+3)
+    gammaArray = log10.(logspace(0.01, 5, 3))
+    println("Remember to check gammaArray line 121")
+    bSolved = zeros(bCols,1)
+    bestObjtives = zeros(kmax, length(gammaArray))
+    println("Warmstart heuristics")
+
+
+    HC = cor(standX)
+
+    #Define an array of variabels that can't be picked to gether
+    HCArray = zeros(length(find(x -> x>=0.8, HC)),2)
+    rho = 0.8
+    itCounter = 1
+    for k=1:size(standX)[2]
+        for j=1:size(standX)[2]
+            if k != j
+                if HC[k,j] >= rho
+                    HCArray[itCounter,1] = k
+                    HCArray[itCounter,2] = j
+                    itCounter += 1
+                end
+            end
+        end
+    end
+    HCArray = HCArray[1:find(x -> x==0,HCArray[:,1])[1]-1,:]
+
+	for i = 8:kmax
+        for g in 1:length(gammaArray)
+			gamma = gammaArray[g]
+            for v = 1:50
+                bSolved = gradDecent(standX, zscore(standY), 100000, 1e-3, i, HC, 0, HCArray)
+                find(bSolved)
+
+            	HCPairCounter = 0
+
+                #println("Building model")
+            	#Define parameters and model
+            	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 10, OutputFlag = 1, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40));
+
+            	#Define variables
+            	@variable(stage2Model, b[1:bCols], start = 0) #Beta values
+
+            	#Define binary variable (5b)
+            	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin, start = 0)
+
+            	@variable(stage2Model, v[1:bCols], start = 0) # auxiliary variables for abs
+
+                # Set warmstart values
+                for j in find(bSolved)
+    				setvalue(b[j], bSolved[j])
+    			    setvalue(v[j], abs(bSolved[j]))
+    				setvalue(z[j], 1)
+    			end
+
+                if v == 2
+                    bSolved = 0
+                    for j in find(bSolved)
+        				setvalue(b[j], bSolved[j])
+        			    setvalue(v[j], abs(bSolved[j]))
+        				setvalue(z[j], 0)
+        			end
+                end
+
+            	@variable(stage2Model, T) #First objective term
+            	@variable(stage2Model, G) #Second objective term
+
+            	#Define objective function (5a)
+            	@objective(stage2Model, Min, T+G)
+
+                @constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
+
+            	#Define constraints (5c)
+            	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z) #from 0 to bCols -1
+            	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z) #from bCols to 2bCols-1
+
+            	#Second objective term
+            	@constraint(stage2Model, 1*b .<= v) #from 2bCols to 3bCols-1
+            	@constraint(stage2Model, -1*b .<= v) #from 3bCols to 4bCols-1
+
+
+            	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
+                @constraint(stage2Model, gammaConstr, gamma*ones(bCols)'*v <= G) #4bCols
+
+                #oneNorm = sum(v[i] for i=1:bCols)
+                #@constraint(stage2Model, gammaConstr, gamma*oneNorm <= G) #4bCols
+
+            	#Define kmax constraint (5d)
+            	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= i) #4bCols+1
+
+            	#Constraint 5f - can only select one of a pair of highly correlated features
+            	rho = 0.8
+            	for k=1:bCols
+            		for j=1:bCols
+            			if k != j
+            				if HC[k,j] >= rho
+            					HCPairCounter += 1
+            					@constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
+            				end
+            			end
+            		end
+            	end
+
+
+            	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+            	for j=1:(nCols-1)
+            		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1) #from (4bCols+1+HCPairCounter) to (4bCols+1+HCPairCounter+nCols)
+            	end
+
+            	#Adding empty cuts to possibly contain cuts. Can generate a maximum of 6 cuts for
+            	#each stage 3 and default value is 3 iterations between stage 2 and stage 3,
+            	#so 18 empty constraints are added + 1 for fixing the solution
+            	nEmptyCuts = 19
+            	zOnes = ones(bCols)
+            	for c = 1:nEmptyCuts
+            		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
+            	end
+
+    			#Solve Stage 2 model
+                solve(stage2Model)
+                bSolved = getvalue(b)
+                bSolMatrix[r,Int64((i-1)*amountOfGammas+g),:] = bSolved
+
+                SSres = sum((standY[i]-(standX[i,:]'*bSolved))^2 for i=1:length(standY))
+                ISRSquared[r,Int64((i-1)*amountOfGammas+g)] = 1 - SSres/SSTO
+    			#Get solution and calculate R^2
+    			#bSolved = sol[1:bCols]
+    			#zSolved = sol[1+bCols:2*bCols]
+
+                obj = Gurobi.getobjval(internalmodel(stage2Model))
+                bound = Gurobi.getobjbound(internalmodel(stage2Model))
+                bestObjtives[Int64(i),Int64(g)] = obj
+                gap = abs.(-1+bound/obj)
+
+                prediction = standXVali*bSolved
+
+    			println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g \t obj = $obj, bound = $bound, gap = $gap")
+                realArr[r,1] = standYVali[1]
+            end
+		end
+		#printNonZeroValues(bSolved)
+	end
+    println(warmstart)
+    return bestObjtives
+	#return #best3Beta, model
+end
+
+"""
+Function that builds and solve the LASSO regression
+"""
 function solveLasso(Xtrain, Ytrain, gamma)
 	bCols = size(Xtrain)[2]
+
+    #Define model
 	M = JuMP.Model(solver = GurobiSolver(OutputFlag = 0))
 	@variables M begin
 	        b[1:bCols]
@@ -249,6 +409,7 @@ function solveLasso(Xtrain, Ytrain, gamma)
 	solve(M)
 	bSolved = getvalue(b)
 
+    #Shrink values to 0
 	for i in 1:length(bSolved)
 		if bSolved[i] <= 1e-6
 			if bSolved[i] >= -1e-6
@@ -257,23 +418,30 @@ function solveLasso(Xtrain, Ytrain, gamma)
 		end
 	end
 
+    #Count non zero prediction terms
 	k = countnz(bSolved)
 	return bSolved, k
 end
 
+"""
+Function to search for lasso solution that uses a specific number of non zero variables k
+"""
 function getBetaAndGamma(standX,standY, kmax)
-	bSolved=zeros(bCols)
-	k=1000
-	iter = 250
+    # Initialise parameters
+    bSolved=zeros(bCols)
+	k=1000 #
+	iter = 250 #start gamma index
     iterCounter = 1
-	gammaArray = log10.(logspace(0, 10, 500))
-	gammaArray
-    distance = 125
+	gammaArray = log10.(logspace(0, 10, 500)) #Searchs space
+    distance = 125 # distance iter is moved in 1st iteration
+
+    #Trying to find k=kmax within 25 iterations
 	while (k!=kmax && iterCounter <= 25)
         if iter>500 || iter <1
             break
         end
 
+        # solve lasse at current gamma and get k non zeros variables
 		bSolved, k = solveLasso(standX,standY,gammaArray[iter])
         #println("k= $k \t distance = $distance, iter = $iter")
         if k > kmax
@@ -281,11 +449,12 @@ function getBetaAndGamma(standX,standY, kmax)
         else
             iter -= distance
         end
-        distance = Int64(ceil(distance/2))
+        distance = Int64(ceil(distance/2)) #Half distance to narrow search space
         iterCounter += 1
 		#println("Iteration: ",iter," gamma=",gammaArray[iter])
 	end
 
+    # If k is not found in the search, bruce force is used to find k
     if k != kmax
         iter = 1
         while (k!=kmax && iter<500)
@@ -300,9 +469,11 @@ function getBetaAndGamma(standX,standY, kmax)
 	return bSolved, k
 end
 
+
+"""
+Build and solve function for stage 2 used in math heuristic
+"""
 function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, rightBranchMatrix, searchSize, HC, rightBranchBool)
-    HCPairCounter = 0
-    #println("Building model")
     #Define parameters and model
     stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 5, OutputFlag = 0, Threads = 2, PreMIQCPForm=0, MIPFocus=1))
 
@@ -313,6 +484,7 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
     @variable(stage2Model, T) #First objective term
     @variable(stage2Model, G) #Second objective term
 
+    #Set warmstart solution
     for j in find(leftBranchMatrix)
         setvalue(b[j], leftBranchMatrix[j])
         setvalue(v[j], abs(leftBranchMatrix[j]))
@@ -322,6 +494,7 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
     #Define objective function (5a)
     @objective(stage2Model, Min, T+G)
 
+    #Define SOC constraint
     @constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
 
     #Define constraints (5c)
@@ -343,7 +516,6 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
         for j=1:bCols
             if k != j
                 if HC[k,j] >= rho
-                    HCPairCounter += 1
                     @constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
                 end
             end
@@ -394,7 +566,7 @@ function buildAndSolveProblem(kmax, standX, standY, r, gamma, leftBranchMatrix, 
         gap = abs.(-1+bound/obj)
         #println("Objective is: ", obj, "\tGap is: ",gap)
         return bSolved, status, obj, gap
-    else
+    else # if model is InfeasibleOrUnbounded all beta = 0 and obj and gap is set to a high value
         #println("\nWriting Problem!\n")
         #writeLP(stage2Model, "TestLP.LP"; genericnames=false)
         bSolved = zeros(bCols)
@@ -412,7 +584,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
     gammaArray = log10.(logspace(0.01, 5, 3))
     bestObjtives = zeros(kmax, length(gammaArray))
 	for i in 1:kmax
-		lassoBsolved, k = getBetaAndGamma(standX,standY, i)
+		lassoBsolved, k = getBetaAndGamma(standX,standY, i)   #Find warmstarted solution
 		prediction = 0
         bSolved = zeros(bCols)
 		for g in 1:length(gammaArray)
@@ -425,44 +597,43 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                 leftBranchMatrix = bSolved
                 rightBranchMatrix = bSolved
             end
-			searchSize = 2
-			#println("kMax = ",i," g = ", g)
+            #println("kMax = ",i," g = ", g)
+
+            #Initialise parameters
+            searchSize = 2
 			oldObj = 1000.0
             obj = 1000.0
             bestObj = 9999
 			gamma = gammaArray[g]
             iter = 1
             rightBranchBool = false
-			while (true)
+			while (true) #Continues the while loop is broken by a condition within the loop
                 #println("Iteration $iter")
-                oldObj = obj
+                oldObj = obj # Update old objective value
 
                 bSolved, status, obj, gap = buildAndSolveProblem(i, standX, standY, r, gamma,
-                    leftBranchMatrix, rightBranchMatrix, searchSize, HC, rightBranchBool)
-
+                    leftBranchMatrix, rightBranchMatrix, searchSize, HC, rightBranchBool) #Solve local problem
                 #println("Kmax = $i and bsolved = ", countnz(bSolved))
 
                 # InfeasibleOrUnbounded case
                 if status == :InfeasibleOrUnbounded
                     #println("Went into ",status)
-                    # Convert leftBranchMatrix into rightBranchMatrix with RHS >= searchSize
-
+                    # End loop as last node can't be solved and the last optimal solve was with a worse objective
                     if (typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64) && iter != 1
                         break
                     end
 
+                    # Convert leftBranchMatrix into rightBranchMatrix with RHS >= searchSize
                     rightBranchMatrix = hcat(rightBranchMatrix, leftBranchMatrix)
 
-                    # Delete leftBranchMatrix
+                    # Delete leftBranchMatrix, bSolve = 0 if status = InfeasibleOrUnbounded
                     leftBranchMatrix = bSolved
-                    #println(leftBranchMatrix)
 
                     # Weak diversification --> Increase searchSize + 1
-                    # When making diversification funciton ensure that there is a k <= kmax constraint / limit
-                    if searchSize >= i+1
+                    if searchSize >= i+1 # Ensure that there is a k <= kmax constraint / limit
                         break
                     else
-                        if i >= 8 && searchSize < i-2
+                        if i >= 8 && searchSize < i-2 # go quicker through small search areas when kMax is big.
                             searchSize += 2
                         else
                             searchSize += 1
@@ -479,7 +650,9 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     #println("Went into ",status, ", with better objective")
                     bestObj = obj
                     bestbSolved = bSolved
+
                     # Add constraint to rightBranchMatrix Delta(x,x_old) >= k + 1
+                    # Diversify due to an optimale worse solution previously found or due to solving the last node to optimality
                     if typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64
                         if searchSize < i+1
                             if i >= 8 && searchSize < i-2
@@ -511,6 +684,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                 if status == :Optimal && obj+1e-3 >= bestObj
                     println("Went into ",status, ", with worse objective")
 
+                    # Diversify due to an optimale worse solution previously found or due to solving the last node to optimality
                     if typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64
                         if searchSize < i+1
                             if i >= 8 && searchSize < i-2
@@ -524,15 +698,17 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                         end
                     end
 
+                    # Diversify due to an optimale worse solution previously found
                     if typeof(leftBranchMatrix) == Int64 || typeof(leftBranchMatrix) == Float64
                         leftBranchMatrix = 0
                         iter += 1
                         continue
-                    else
+                    else #First time we see optimal with worse solution -- Add leftbranch constraint to right branch and tries to solve rootnode
                         rightBranchBool = true
                         rightBranchMatrix = hcat(rightBranchMatrix, leftBranchMatrix)
                     end
-                    leftBranchMatrix = 0
+                    leftBranchMatrix = 0 #Set leftBranchMatrix to an integer/float value
+
                     # Add constraint to rightBranchMatrix Delta(x,x_old) >= k + 1
                     # Solve to depth / timeLimit reached
 
@@ -546,7 +722,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     bestObj = obj
                     bestbSolved = bSolved
 
-                    # Add constraints to leftBranchMatrix Delta(x,x_new) <= k
+                    # Update constraints to leftBranchMatrix Delta(x,x_new) <= k
                     leftBranchMatrix = bSolved
 
                     # Rerun algorith
@@ -554,29 +730,13 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
                     continue
                 end
 
+                # Return TimeLimit / UserLimit with worse solution
                 if status == :UserLimit && obj+1e-3 >= bestObj
                     #println("Went into ",status, ", with worse objective")
-                # Return TimeLimit / UserLimit with same solution
-                # End algorithm under the argument that the stanadard implementation would have solved it by now
+                    # End algorithm under the argument that the stanadard implementation would have solved it by now
                     iter += 1
                     break
                 end
-
-				#bSolMatrix[r,Int64((i-1)*amountOfGammas+g),:] = bSolved
-				#SSres = sum((standY[i]-(standX[i,:]'*bSolved))^2 for i=1:length(standY))
-				#ISRSquared[r,Int64((i-1)*amountOfGammas+g)] = 1 - SSres/SSTO
-
-				#Get solution and calculate R^2
-				#bSolved = sol[1:bCols]
-				#zSolved = sol[1+bCols:2*bCols]
-
-				#prediction = standXVali*bSolved
-				#diff = abs.(predOld-prediction[1])
-				#predOld=prediction[1]
-
-
-
-                #println("Difference is:", diff)
 			end #While loops ends
 
             bestObjtives[Int64(i), Int64(g)] = bestObj
@@ -584,7 +744,6 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
 			#println("Number of non zero actually: ", countnz(bSolved))
 
 			#println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g")
-			#solArr[r+2,Int64((i-1)*amountOfGammas+g)] = prediction[1]
 			#realArr[r,1] = standYVali[1]
             prediction = standXVali*bestbSolved
 
@@ -595,7 +754,7 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
     return bestObjtives
 end
 
-#return #best3Beta, solArr, model
+#return #best3Beta, model
 
 #="""
 For each of the three beta sets produced, we will test for significance
@@ -605,93 +764,6 @@ than the other. All it means is that variables are more correlated or less.
 Whether it's good or not depends on the application.
 """=#
 
-function stageThree(best3Beta, X, Y, allCuts)
-	#=Condition Number
-	  A high condition number indicates a multicollinearity problem. A condition
-	  number greater than 15 is usually taken as evidence of
-	  multicollinearity and a condition number greater than 30 is
-	  usually an instance of severe multicollinearity
-	=#
-
-	bCols = size(X)[2]
-	nRows = size(X)[1]
-	cuts = Matrix(0, bCols+1)
-	rowsPerSample = nRows #All of rows in training data to generate beta estimates, but selected with replacement
-	totalSamples = 25 #25 different times we will get a beta estimate
-	nBoot = 10000
-
-	#For loop start
-	for i = 1:size(best3Beta)[1]
-		if signifBoolean[i] == 1 #if the previous solution was already completely significant, skip the bootstrapping
-			continue
-		end
-		bestBeta = best3Beta[i,4:bCols+3]
-		bestK = best3Beta[i,2]
-		bestGamma = best3Beta[i,3]
-
-		xColumns = []
-		bSample = Matrix(totalSamples, bCols)
-
-		bZeros = zeros(bCols)
-		for j = 1:bCols
-			if !isequal(bestBeta[j],0)
-				push!(xColumns, j)
-			end
-		end
-
-		selectedX = X[:,xColumns]
-		condNumber = cond(selectedX)
-		if condNumber >= 15
-			bZeros[xColumns] = 1
-			subsetSize = size(xColumns)[1]
-			newCut = [bZeros' subsetSize]
-			cuts = [cuts; newCut]
-			println("A cut based on Condition number = $condNumber has been created from Beta$i")
-		end
-
-		# test significance
-		bestZ = zeros(bestBeta)
-		for l=1:size(bestBeta)[1]
-			if bestBeta[l] != 0
-				bestZ[l] = 1
-			end
-		end
-
-		bZeros = zeros(bCols)
-		createBetaDistribution(bSample, X, Y, bestK, totalSamples, rowsPerSample,  bestGamma, allCuts, bestZ) #standX, standY, k, sampleSize, rowsPerSample
-
-		confArray99 = createConfidenceIntervalArray(bSample, nBoot, 0.99)
-		confArray95 = createConfidenceIntervalArray(bSample, nBoot, 0.95)
-		confArray90 = createConfidenceIntervalArray(bSample, nBoot, 0.90)
-
-		significanceResult = testSignificance(confArray99, confArray95, confArray90, bestBeta)
-		significanceResultNONSI = [] # = significanceResult[xColumns]
-		subsetSize = size(xColumns)[1]
-		for n = 1:size(significanceResult)[1]
-			for s = 1:subsetSize
-				if significanceResult[n] == 0 && xColumns[s] == n
-					push!(significanceResultNONSI,xColumns[s])
-					println("Parameter $n is selected, but NOT significant")
-				elseif significanceResult[n] > 0 && xColumns[s] == n
-					println("Parameter $n is significant with ", significanceResult[n])
-				end
-			end
-		end
-
-		if !isempty(significanceResultNONSI)
-			bZeros[significanceResultNONSI] = 1
-			subsetSize = size(significanceResultNONSI)[1]
-			newCut = [bZeros' subsetSize]
-			cuts = [cuts; newCut]
-			println("A cut based on parameters being non-significant in Beta$i has been created")
-		end
-		if isempty(significanceResultNONSI)
-			signifBoolean[i] = 1
-		end
-	end
-	return cuts
-end
-
 function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     nRows = size(standX)[1]
 
@@ -700,15 +772,18 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     allCuts = []
     signifBoolean = zeros(3)
 
+    #mathheuristic
     warmstart = false
 	bestObjtivesNormal = @time(solveAndLogForAllKMath(kmax, standXVali, standYVali, r))
     println("This was time for mathheuristic")
 
+    #Nonwarmstart
     warmstart = false
     bestObjtivesWarmstart = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     print("This was time for non warmstart")
     println("")
 
+    #lasso warmstart
     warmstart = true
     bestObjtivesMath = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     println("This was time for warmstart")

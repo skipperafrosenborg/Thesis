@@ -31,18 +31,18 @@ using DataFrames
 using CSV
 using JuMP
 include("SupportFunction.jl")
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/WineQualityRed/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/Diabetes64/"
 cd(path)
 
-nCols = 50
+nCols = 262
 
 totalLog = zeros(30,nCols)
 
-fName = "WineQualityRed"
+fName = "Diabetes64"
 
 for i = 1:10
     println(i)
-    mainData = Array(CSV.read("Data/"*string(i)*"Xtrain.csv", delim = ',', nullable=false))
+    mainData = Array(CSV.read(string(i)*"Xtrain.csv", delim = ',', nullable=false))
     best3Beta = CSV.read(string(i)*"_"*fName*".csv", delim = ',', nullable=false, types = fill(Float64,nCols), header=false, datarow=2)
 
     best3BetaArr = Array(best3Beta)
@@ -69,7 +69,7 @@ end
 
 for i = 1:10
     println(i)
-    mainData = Array(CSV.read("Data/"*string(i)*"Xtrain.csv", delim = ',', nullable=false))
+    mainData = Array(CSV.read(""*string(i)*"Xtrain.csv", delim = ',', nullable=false))
     dataInput = CSV.read(string(i)*"_Lasso"*fName*".csv", delim = ',', nullable=false, types = dataT, datarow=2, header=false)
 
     dataInputArr = Array{Float64}(dataInput)

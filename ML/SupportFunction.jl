@@ -44,18 +44,24 @@ function shrinkValuesH(betaVector, kMax, HCArray)
 		#Find index of maximum value in absolute vector
 		ind = indmax(absCopy)
 
-		#Replace index in 0 vector with betaVector value of index
+		#Replace index in zeroVector with betaVector value of index
 		zeroVector[ind] = betaVector[ind]
 
 		#Replace index in absolute vector with 0
 		absCopy[ind] = 0
 
+		#println("Ind is: ",ind)
+
         #Check if index is in HC array and add all
-        HCvar = find(HCArray[:,1] .== ind)
+        HCvar = find(HCArray[:,1] .== ind) #Maybe need to check both sides
+
+		#println("HCVar is :",HCvar)
 
         if !isempty(HCvar)
             for j in 1:length(HCvar)
-                absCopy[HCArray[HCvar[j],2]] = 0
+				#println("Abscopy index is : ",HCArray[HCvar[j],2])
+				absCopy[Int64(HCArray[HCvar[j],2])] = 0
+                #absCopy[Int64(HCArray[Int64(HCvar[j])),2]] = 0
                 #println("Extra shrink")
             end
         end
@@ -92,19 +98,27 @@ end
 Vanilla gradient decent which only keeps the kMax biggest values. All other
 values are shrunk to 0.
 """
-function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
-    HCArray = Matrix(0,2)
-    rho = 0.8
-    for k=1:size(X)[2]
-    	for j=1:size(X)[2]
-    		if k != j
-    			if HC[k,j] >= rho
-                    HCArray = cat(1, HCArray, [k j])
-    			end
-    		end
-    	end
-    end
+function gradDecent(X, y, L, epsilon, kMax, HC, bSolved, HCArray)
+	#Define an array of variabels that can't be picked to gether
+	#=
+	HCArray = zeros(length(find(x -> x>=0.8, HC))/2,2)
+	rho = 0.8
+	itCounter = 1
+	for k=1:size(X)[2]
+		for j=k+1:size(X)[2]
+			if k != j
+				if HC[k,j] >= rho
+					HCArray[itCounter,1] = k
+					HCArray[itCounter,2] = j
+					itCounter += 1
+				end
+			end
+		end
+	end
+	HCArray = HCArray[1:find(x -> x==0,HCArray[:,1])[1]-1,:]
+	=#
 
+	#If first iteration intialise bSolve randomly
 	if countnz(bSolved) < 1
 		bSolved = rand(size(X)[2])
 	end
@@ -116,7 +130,7 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
 	oldBetaVector = copy(betaVector)
 	curError = twoNormRegressionError(X, y, betaVector) - twoNormRegressionError(X, y, oldBetaVector) + 10000
 
-	while (iter < 10000 && curError > epsilon)
+	while (iter < 2000 && curError > epsilon)
 		oldBetaVector = copy(betaVector)
 
 		#Calculate delta(g(beta))
@@ -124,6 +138,9 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved)
 
 		#Shrink smalles values
 		betaVector = copy(shrinkValuesH(betaVector+1/L*gradBeta, kMax, HCArray))
+		if find(oldBetaVector) != find(betaVector)
+			#println("New beta")
+		end
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))
 		iter += 1
