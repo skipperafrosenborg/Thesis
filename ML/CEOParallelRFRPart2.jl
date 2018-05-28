@@ -59,7 +59,7 @@ for l1 = 1:nGammas
         end
     end
 end
-modelConfig
+
 
 #Initialization of parameters
 w1N = repeat([1/11], outer = 11) #1/N weights
@@ -76,6 +76,8 @@ bestModelIndexes = zeros(bestModelAmount)
 
 weightsPerfect = zeros(nRows-trainingSize, 11)
 weightsCEO     = zeros(nRows-trainingSize, 11, amountOfModels)
+expectedReturnMatrix = zeros(nRows-trainingSize, 11)
+forecastErrors = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
@@ -93,10 +95,14 @@ for i = 1:5
         PMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_PMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
         return1NMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_return1NMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
         returnCEOMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_returnCEOMatrix.csv",header=false, datarow=1, nullable=false, types=[Float64]))
+        expectedReturnTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_ceoRFRForecasts.csv",header=false, datarow=1, nullable=false, types=[Float64]))
+        errorMatrixTemp = Array{Float64}(CSV.read(path*string(i)*"_"*string(j)*"_ceoRFRErrors.csv",header=false, datarow=1, nullable=false, types=[Float64]))
 
         PMatrix[i,:] += PMatrixTemp
         return1NMatrix[i] += return1NMatrixTemp[i]
         returnCEOMatrix[i,:] += returnCEOMatrixTemp
+        expectedReturnMatrix[i,:] += forecastMatrixTemp
+        forecastErrors[i,:] += errorMatrixTemp
     end
 end
 
@@ -148,6 +154,7 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
             returnPerfect = returnPerfectMatrix[t]
+
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
         end
@@ -168,6 +175,9 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
 
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
             expectedReturns[11] = rfRates[t+trainingSize]
+            if m == 1
+                expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+            end
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
             valY = zeros(11)
             for i = 1:10
@@ -186,6 +196,9 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
             returnPerfect = returnPerfectMatrix[t]
+            if m == 1
+                forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
+            end
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
         end
@@ -197,4 +210,6 @@ combinedPortfolios = hcat(returnPerfectMatrix[1:nRows-trainingSize-2, 1], return
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
 path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
 writedlm(path*string(inputArg1)*"_returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
+combinedPortfolios2 = hcat(expectedReturnMatrix, forecastErrors)
+writedlm(path*string(inputArg1)*"_forecastsAndErrors1to200.csv", combinedPortfolios2, ",")
 println("Finished Everything")

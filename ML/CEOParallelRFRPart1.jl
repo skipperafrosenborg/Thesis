@@ -81,6 +81,8 @@ bestModelIndexes = zeros(bestModelAmount)
 
 weightsPerfect = zeros(nRows-trainingSize, 11)
 weightsCEO     = zeros(nRows-trainingSize, 11, amountOfModels)
+#expectedReturnMatrix = zeros(nRows-trainingSize, 11)
+#forecastErrors = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
@@ -107,6 +109,7 @@ for m = 1+(inputArg2*25):25+(inputArg2*25)#:amountOfModels
 
     expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
     expectedReturns[11] = rfRates[t+trainingSize]
+
     #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
     valY = zeros(11)
     for i = 1:10
@@ -124,6 +127,7 @@ for m = 1+(inputArg2*25):25+(inputArg2*25)#:amountOfModels
     weightsCEO[t, 1:11, m]        = wStar
     return1NMatrix[t, m]       = return1N
     returnCEOMatrix[t, m]      = returnCEO
+
     returnPerfect = returnPerfectMatrix[t]
     println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
     PMatrix[t, m] = calculatePvalue(return1N, returnPerfect, returnCEO)
@@ -137,3 +141,5 @@ writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_weightsCEO.csv", weights
 writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_return1NMatrix.csv", return1NMatrix[t,:], ",")
 writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_returnCEOMatrix.csv", returnCEOMatrix[t,:], ",")
 writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_PMatrix.csv", PMatrix[t,:], ",")
+#writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_ceoRFRErrors.csv", forecastErrors[t,:], ",")
+#writedlm(path*string(inputArg1)*"_"*string(inputArg2)*"_ceoRFRForecasts.csv", expectedReturnMatrix[t,:], ",")
