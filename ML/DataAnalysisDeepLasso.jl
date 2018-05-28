@@ -87,11 +87,11 @@ function getRaw()
     for j = 1:10
         for k = 1:10
             z_score = (avgUsage[j,k]-realmean)/(realStd)
-            if z_score > 3.090232306
+            if z_score > 2.326347874
                 signifMat[j,k] = "***"
-            elseif z_score > 2.326347874
-                signifMat[j,k] = "**"
             elseif z_score > 1.644853627
+                signifMat[j,k] = "**"
+            elseif z_score > 1.281551566
                 signifMat[j,k] = "*"
             else
                 signifMat[j,k] = " "
@@ -204,6 +204,7 @@ function getMacroTimeTA()
             for t = 0:12
                 avgUsage[j,k] += countnz(testMat[:,k+27*t])/845
             end
+            avgUsage[j,k] = avgUsage[j,k]/13
         end
 
         for k = 28:35
@@ -216,11 +217,11 @@ function getMacroTimeTA()
     for j = 1:10
         for k = 1:35
             z_score = (avgUsage[j,k]-realmean)/(realStd)
-            if z_score > 3.090232306
+            if z_score > 2.326347874
                 signifMat[j,k] = "***"
-            elseif z_score > 2.326347874
-                signifMat[j,k] = "**"
             elseif z_score > 1.644853627
+                signifMat[j,k] = "**"
+            elseif z_score > 1.281551566
                 signifMat[j,k] = "*"
             else
                 signifMat[j,k] = " "
@@ -280,18 +281,20 @@ function getMacroTimeTAMostUsedVariables()
     mean(allMatMean)
     std(allMatMean)
 
-    stepVector = zeros(10001,3)
-    for i = 0:10000
-        stepVector[i+1,1] = i/10000
-        x = length(find(x-> x <= i/10000, mean(allMat,1)))
+    n = 500
+
+    stepVector = zeros(n+1,3)
+    for i = 0:n
+        stepVector[i+1,1] = i/n
+        x = length(find(x-> x <= i/n, mean(allMat,1)))
         stepVector[i+1,3] = x
-        y = length(find(x-> x >= i/10000 && x < (i+1)/10000, mean(allMat,1)))
+        y = length(find(x-> x >= i/n && x < (i+1)/n, mean(allMat,1)))
         stepVector[i+1,2] = y
     end
     writedlm(path*"ParametersAnalysis/MacroTimeTAParameterDistribution.CSV",stepVector,",")
 
     x = find(x-> x< 0.05 && x>0.01, mean(allMat,1))
-    x = find(x-> x> 0.33, mean(allMat,1))
+    x = find(x-> x> 0.5, mean(allMat,1))
 
     for i=x
         if floor(i/27) < 13
@@ -344,13 +347,13 @@ function getVixMacroTimeTA()
     realmean = mean(avgUsage)
     realStd = std(avgUsage)
     for j = 1:10
-        for k = 1:36
+        for k = 1:10
             z_score = (avgUsage[j,k]-realmean)/(realStd)
-            if z_score > 3.090232306
+            if z_score > 2.326347874
                 signifMat[j,k] = "***"
-            elseif z_score > 2.326347874
-                signifMat[j,k] = "**"
             elseif z_score > 1.644853627
+                signifMat[j,k] = "**"
+            elseif z_score > 1.281551566
                 signifMat[j,k] = "*"
             else
                 signifMat[j,k] = " "

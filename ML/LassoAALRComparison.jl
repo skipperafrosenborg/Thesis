@@ -5,20 +5,20 @@ include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
 
 industry = "NoDur"
-folder = "120"
+folder = "240"
 for i = [12, 24, 36, 48, 120, 240]
     #folder = string(i)
     #writeFile()
 end
 
 # Load all 3 AALR data
-nRows = 966
+nRows = 845
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/AALRTest/"*string(folder)*"-1/"
 cd(path)
 
 AALRMainData = zeros(3, nRows, 1472)
 for i = 1:nRows
-    f = open(string(i)*"AALRBestK_120.csv")
+    f = open(string(i)*"AALRBestK_240.csv")
     readline(f)
     s = readline(f)
     AALRMainData[1, i, :] = parse.(Float64, split(s, ","))
@@ -56,7 +56,7 @@ for i = 1:1463
 	dType = vcat(dType,Float64)
 end
 
-LassoMainData = CSV.read("120_VIX_MacroTimeExpTA_bMatrix120_"*string(minIndex)".csv", header=s,
+LassoMainData = CSV.read("240_VIX_MacroTimeExpTA_bMatrix240_"*string(minIndex)".csv", header=s,
     delim = ',', nullable=false, types = dType)
 
 #Remove all columns that are never active for both AALR and LASSO
@@ -72,16 +72,17 @@ for i=1:size(LassoMainData)[2]
 	end
 end
 LassoTotalNumActiveParam = size(LassoMainDataActive)[2]
+println("Number of active parameters is ", LassoTotalNumActiveParam)
 LassoAvgParamUsage = mean(LassoParamUsage)/size(LassoMainData)[2]
-maximum(LassoParamUsage)/size(LassoMainData)[1]
-println("An active parameter is used ", mean(LassoParamUsage)/size(LassoMainData)[2]*100,"% of the time")
+println("Most used parameter ", maximum(LassoParamUsage)/size(LassoMainData)[1])
+println("An active parameter in LASSO is used ", mean(LassoParamUsage)/size(LassoMainData)[2]*100,"% of the time")
 
 AALRMainData[1,:,:]
 AALRMainDataActive = Array{Float64}(size(AALRMainData)[2],0)
 AALRHeaderActive = Array{String}(0)
 AALRParamUsage = Array{Float64}(0)
 for i=1:size(AALRMainData[1,:,:])[2]
-	paramUsage = countnz(AALRMainData[1,:,i])
+    paramUsage = length(find(x -> x>2e-6 || x<-2e-6, AALRMainData[1,:,i]))
 	if paramUsage > 0
 		AALRParamUsage = vcat(AALRParamUsage, paramUsage)
 		AALRMainDataActive = hcat(AALRMainDataActive,AALRMainData[1,:,i])
@@ -89,9 +90,11 @@ for i=1:size(AALRMainData[1,:,:])[2]
 	end
 end
 AALRTotalNumActiveParam = size(AALRMainDataActive)[2]
+println("Number of active parameters is ",AALRTotalNumActiveParam)
 AALRAvgParamUsage = mean(AALRParamUsage)/size(AALRMainData[1,:,:])[2]
-maximum(AALRParamUsage)/size(LassoMainData)[1]
-println("An active parameter is used ", mean(AALRParamUsage)/size(AALRMainData[1,:,:])[2]*100,"% of the time")
+println("Most used parameter ", maximum(AALRParamUsage)/size(LassoMainData)[1])
+println("An active parameter in AALR is used ", mean(AALRParamUsage)/size(AALRMainData[1,:,:])[2]*100,"% of the time")
+
 
 #Count average number of parameters in AALR and LASSO
 LassoMainDataArr = Array{Float64}(LassoMainData)

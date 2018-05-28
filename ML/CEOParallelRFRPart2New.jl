@@ -1,12 +1,13 @@
 ##### MEAN-VARIANCE OPTIMIZATION
 #This is not supposed to produce great results, since mean and covariance
 #is supposed to be very exact before good weights are found
+
+#Load packages and support functions
 using JuMP
 using Gurobi
 using StatsBase
 using DataFrames
 using CSV
-using Distributions
 include("SupportFunction.jl")
 include("DataLoad.jl")
 include("CEOSupportFunctions.jl")
@@ -14,17 +15,18 @@ println("Leeeeroooy Jenkins")
 #Esben's path
 #path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexData"
 
+#Set path for dataloading
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
+#Set parameters
 trainingSize = 240
 possibilities = 5
 industries = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 industriesTotal = length(industries)
 
+#Define the input and transformations
 modelMatrix = zeros(industriesTotal, possibilities)
-#noDurModel = [1 0 1 1 1]
-#noDurModel = [1 0 1 0 1]
 noDurModel = [1 0 0 1 1]
 testModel = [1 0 0 1 1]
 modelMatrix[1, :] = noDurModel
@@ -32,26 +34,28 @@ for i=2:industriesTotal
     modelMatrix[i, :] = noDurModel
 end
 
+#Create and fill X and Y arrays
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
-
 XArrays, YArrays = generateXandYs(industries, modelMatrix)
 
+#Set
 nGammas = 5
 standY = YArrays[1]
 SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
 lambdaValues = log.(logspace(100, SSTO/2, nGammas))
+#lambda4Values = [1e4,1e5,1e6,1e7,1e8]
 nRows = size(standY)[1]
 amountOfModels = nGammas^4
 
-srand(1)
 modelConfig = zeros(amountOfModels, 4)
 counter = 1
 for l1 = 1:nGammas
     for l2 = 1:nGammas
         for l3 = 1:nGammas
             for l4 = 1:nGammas
-                modelConfig[counter,:] = [rand(Uniform(1,100),1) rand(Uniform(10,10000)) rand(Uniform(1,100)) rand(Uniform(1,10000))]
+                modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambdaValues[l4]]
+                #modelConfig[counter,:] = [lambdaValues[l1] lambdaValues[l2] lambdaValues[l3] lambda4Values[l4]]
                 counter += 1
             end
         end
@@ -59,33 +63,31 @@ for l1 = 1:nGammas
 end
 modelConfig
 
-
-
 #Initialization of parameters
 w1N = repeat([1/11], outer = 11) #1/N weights
 gamma = 2.4 #risk aversion
-validationPeriod = 5
-PMatrix = zeros(nRows-trainingSize, amountOfModels)
-return1NMatrix = zeros(nRows-trainingSize)
-returnCEOMatrix = zeros(nRows-trainingSize, amountOfModels)
-returnPerfectMatrix = zeros(nRows-trainingSize)
+validationPeriod = 0 # Number of periods to do parameter training
+PMatrix = zeros(nRows-trainingSize, amountOfModels) 
 
 bestModelAmount = 5
 bestModelConfigs = zeros(bestModelAmount, 4)
 bestModelIndexes = zeros(bestModelAmount)
 
+return1NMatrix = zeros(nRows-trainingSize)
+returnCEOMatrix = zeros(nRows-trainingSize, bestModelAmount)
+returnPerfectMatrix = zeros(nRows-trainingSize)
+
 weightsPerfect = zeros(nRows-trainingSize, 11)
-weightsCEO     = zeros(nRows-trainingSize, 11, amountOfModels)
+weightsCEO     = zeros(nRows-trainingSize, 11, bestModelAmount)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
-
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/RFR/VIXTimeTA2.4/"
 path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
 weightsPerfect = Array{Float64}(CSV.read(path*"weightsPerfect.csv",header=false, datarow=1, nullable=false))
 returnPerfectMatrix = Array{Float64}(CSV.read(path*"returnPerfectMatrix.csv", header=false, datarow=1, nullable=false))
-
+#=
 for i = 1:5
     for j = 0:24
         #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
@@ -99,18 +101,26 @@ for i = 1:5
         returnCEOMatrix[i,:] += returnCEOMatrixTemp
     end
 end
-
+=#
 #Load weightsPerfect and return perfect matrix
 #Load PMatrix
 
-modelMeans = mean(PMatrix, 1)
+#modelMeans = mean(PMatrix, 1)
+bestModelConfigs[1,:] = [1 10 0.01 10]
+bestModelConfigs[2,:] = [1 100 0.01 100]
+bestModelConfigs[3,:] = [0.01 10 1 10]
+bestModelConfigs[4,:] = [0.01 100 1 100]
+bestModelConfigs[5,:] = [1 0.5 0 0]
+
 for i = 1:bestModelAmount
-    bestModelIndex = indmax(modelMeans)
-    bestModelConfigs[i,:] = modelConfig[bestModelIndex, :]
-    bestModelIndexes[i] = bestModelIndex
+    #bestModelIndex = indmax(modelMeans)
+    #bestModelConfigs[i,:] = modelConfig[bestModelIndex, :]
+    bestModelIndexes[i] = i
     #place 0 at index place now and take new max as "next best model"
-    modelMeans[bestModelIndex] = 0
+    #modelMeans[bestModelIndex] = 0
 end
+
+
 
 inputArg1 = 83 #83 breaks the trainingSize
 inputArg1 = parse(Int64,ARGS[1])
@@ -144,9 +154,9 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             U = F[:U]  #Cholesky factorization of Sigma
 
             return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
-            weightsCEO[t, 1:11]     = wStar
+            weightsCEO[t, 1:11, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
-            returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
+            returnCEOMatrix[t, Int64(bestModelIndexes[m])] = returnCEO
             returnPerfect = returnPerfectMatrix[t]
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
@@ -182,9 +192,9 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             U = F[:U]  #Cholesky factorization of Sigma
 
             return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
-            weightsCEO[t, 1:11]     = wStar
+            weightsCEO[t, 1:11, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
-            returnCEOMatrix[t, Int64(bestModelIndexes[m])]     = returnCEO
+            returnCEOMatrix[t, Int64(bestModelIndexes[m])]  = returnCEO
             returnPerfect = returnPerfectMatrix[t]
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
@@ -197,4 +207,7 @@ combinedPortfolios = hcat(returnPerfectMatrix[1:nRows-trainingSize-2, 1], return
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
 path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
 writedlm(path*string(inputArg1)*"_returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
+for i = 1:bestModelAmount
+    writedlm(path*"wightsCEO_Model"*string(i)*"_"*string(inputArg1)*".csv",weightsCEO[:,:,i], ",")
+end
 println("Finished Everything")

@@ -242,6 +242,8 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
 
     @time(solve(M))
     betaArray = getvalue(b)
+    fVars = getvalue(f)
+    yvars = getvalue(y)
     #Insert shrinking here
     return betaArray, U
 end
