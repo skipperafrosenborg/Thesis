@@ -63,21 +63,48 @@ for(i in (split+1):initCols){
 for(i in 2:initCols){
   print(paste("P-value for adf.test",i,"is: ", adf.test(data[,i])$p.value))
 }
+?adf.test
 #all time-series are stationary, despite the peaks. Maybe a differencing anyway
 
 
 ##### BOXPLOTS -----
 
 #Months to see if seasonality could be present
-plot.new()
-par(mfrow=c(plotRows, plotCols))
 for(i in 2:split){
   boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
 for(i in (split+2):initCols-1){
   boxplot(data[,i] ~ data$Month, main = paste("Monthly Boxplots for", names(data)[i], "Returns"),ylim=c(-20, 20))
 }
-#No statistical difference between months at all
+#Slight difference between some months, especially january and others
+plot.new()
+par(mfrow=c(plotRows, plotCols))
+nRows = nrow(data)
+industry = 12
+janShops = c()
+for(i in 1:nRows){
+  if(data$Month[i] == "01"){
+    janShops = c(janShops, i)
+  }
+}
+decShops = c()
+for(i in 1:nRows){
+  if(data$Month[i] == "12"){
+    decShops = c(decShops, i)
+  }
+}
+
+junShops = c()
+for(i in 1:nRows){
+  if(data$Month[i] == "06"){
+    junShops = c(junShops, i)
+  }
+}
+decShopsReturns = data[decShops, industry]
+janShopsReturns = data[janShops, industry]
+junShopsReturns = data[junShops, industry]
+ks.test(janShopsReturns, decShopsReturns)
+ks.test(junShopsReturns, decShopsReturns)
 
 #Years to see if yearly seasonality could be present
 plot.new()
@@ -97,11 +124,11 @@ for(i in (split+1):(initCols-1)){
 plot.new()
 par(mfrow=c(plotRows, plotCols))
 for(i in 2:split){
-  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), xlab = "Return")
+  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), ylim = c(0,60), xlab = "Return")
 }
 
 for(i in (split+1):(initCols-1)){
-  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), xlab = "Return")
+  hist(data[,i], breaks = 250, main = paste("Distribution of ", names(data)[i], "Returns"), xlim=c(-30,30), ylim = c(0,60), xlab = "Return")
 }
 
 

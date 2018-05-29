@@ -974,7 +974,9 @@ function performMVOptimizationRISK(expectedReturns, U, gamma, Xrow, Yvalues)
     solve(M)
     wStar = getvalue(w)
 
-    forecastRow = (exp(Xrow)-1)*100
+	forecastRow = zeros(11)
+	forecastRow[1:10] = (exp.(Xrow[1:10])-1)*100
+	forecastRow[11]   = (exp.(Xrow[11])-1)
 
     periodReturn = forecastRow'*wStar
     period1NReturn = forecastRow'*w1N

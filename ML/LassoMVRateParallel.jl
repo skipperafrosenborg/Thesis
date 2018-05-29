@@ -128,10 +128,11 @@ for g = 1:10
             estimate = CSV.read(path*industries[i]*"/"*string(trainingSize)*"-1/"*"240_"*bestFileName*"_predicted.CSV",nullable=false)
             expectedReturns[i] = estimate[:,3+fileIndex][t]
         end
-        expectedReturns
+
         expectedReturns[11] = rfRates[t+trainingSize]
 
-        expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+        expectedReturnMatrix[t, 1:10] = (exp.(expectedReturns[1:10])-1)*100
+        expectedReturnMatrix[t, 11] = expectedReturns[11]
         #=
         #Economic constraint; only focus on positive expected returns
         for i = 1:10
@@ -156,7 +157,7 @@ for g = 1:10
         valY[11] = rfRates[t+trainingSize]
         return1N, returnPPD, wPPD, forecastRow = performMVOptimizationRISK(expectedReturns, U, gammaRisk, valY, valY)
         weightsPPD[t, 1:11]    = wPPD
-        forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
+        forecastErrors[t, 1:11]  = forecastRow-expectedReturnMatrix[t,:]
         return1NMatrix[t]      = return1N
         returnPPDMatrix[t]     = returnPPD
     end

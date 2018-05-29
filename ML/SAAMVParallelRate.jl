@@ -45,6 +45,7 @@ YArrays = Array{Array{Float64, 2}}(industriesTotal)
 riskAversions = linspace(0, 4, 16)
 XArrays, YArrays = generateXandYs(industries, modelMatrix)
 
+
 nRows = size(XArrays[1])[1]
 w1N = repeat([0.1], outer = 11) #1/N weights
 return1NMatrix = zeros(nRows-trainingSize)
@@ -72,7 +73,8 @@ for g = 1:length(riskAversions)
             expectedReturns[i] = mean(trainingYArrays[i][:])
         end
         expectedReturns[11] = rfRates[t+trainingSize]
-        expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+        expectedReturnMatrix[t, 1:10] = (exp.(expectedReturns[1:10])-1)*100
+        expectedReturnMatrix[t, 11] = expectedReturns[11]
 
         rfRatesVec = rfRates[t:(t+trainingSize-1)]
         trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
@@ -90,7 +92,7 @@ for g = 1:length(riskAversions)
         valY[11] = rfRates[t+trainingSize]
         return1N, returnSAA, wSAA, forecastRow = performMVOptimizationRISK(expectedReturns[:], U, gammaRisk, valY, valY)
         weightsSAA[t, 1:11]    = wSAA
-        forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
+        forecastErrors[t, 1:11]  = forecastRow-expectedReturnMatrix[t,:]
         return1NMatrix[t]      = return1N
         returnSAAMatrix[t]     = returnSAA
     end
