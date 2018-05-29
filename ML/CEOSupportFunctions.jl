@@ -97,7 +97,9 @@ function findPerfectResultsRFR(trainingXArrays, Xrow, Yvalues, gamma)
     @constraint(M, norm([2*U'*w;y-1]) <= y+1)
     solve(M)
     wPerfect = getvalue(w)
-    forecastRow = (exp.(Xrow')-1)*100
+    forecastRow = zeros(11)
+	forecastRow[1:10] = (exp.(Xrow[1:10])-1)*100
+	forecastRow[11]   = (exp.(Xrow[11])-1)
     periodPerfectReturn = forecastRow*wPerfect
 
     return wPerfect, periodPerfectReturn
@@ -146,7 +148,9 @@ function performMVOptimizationRISK(expectedReturns, U, gamma, Xrow, Yvalues)
     solve(M)
     wStar = getvalue(w)
 
-    forecastRow = (exp(Xrow)-1)*100
+    forecastRow = zeros(11)
+	forecastRow[1:10] = (exp.(Xrow[1:10])-1)*100
+	forecastRow[11]   = (exp.(Xrow[11])-1)
 
     periodReturn = forecastRow'*wStar
     period1NReturn = forecastRow'*w1N
@@ -167,7 +171,7 @@ function generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, va
     for i = 1:10
         errorArray = (trainingXArrays[i]*betaArray[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
         errorSum = sum(errorArray)
-        expectedReturns[i] = validationXRows[i][:]'*betaArray[i,1:bCols[i]]
+        expectedReturns[i] = validationXRows[i][:]'*betaArray[i,1:bCols[i]]-errorSum
     end
     return expectedReturns
 end
@@ -263,6 +267,12 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
         periodMean[i] = mean(trainingYArrays[i][:,1])
     end
 
+    periodCap = zeros(11)
+    for i = 1:10
+        periodCap[i] = maximum(trainingYArrays[i][:])
+    end
+    periodCap[11] = maximum(rfRatesVec)
+
     periodMean[11] = mean(rfRatesVec)
 
     #A=U^(T)U where U is upper triangular with real positive diagonal entries
@@ -289,11 +299,6 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
 
     @objective(M,Min,sum(l1*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-sum(f[i,t] for i=1:11) for t=1:bRows)) - l4*(sum(w[11,t]*rfRatesVec[t] for t=1:bRows) + sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
 
-    periodCap = zeros(11)
-    for i = 1:10
-        periodCap[i] = maximum(trainingYArrays[i][:])
-    end
-    periodCap[11] = maximum(rfRatesVec)
 
     for i = 1:(industriesTotal+1)
         for t = 1:bRows
@@ -309,7 +314,7 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
 
     for i = 1:10
         errorArray = (trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
-        errorSum = sum(errorArray) 
+        errorSum = sum(errorArray)
         for t = 1:bRows
             prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
             @constraint(M, prediction + errorSum >= f[i, t]) ##== originally
@@ -415,23 +420,4 @@ function generateXandYs(industries, modelMatrix)
         YArrays[i] = standY
     end
     return XArrays, YArrays
-end
-
-"""
-Keeps track of returns for both the proposed method and 1/N.
-Needs the overall array as well as the two next returns to push
-"""
-
-function trackPortfolioReturns(ReturnOverall, individualReturn, newPeriodReturn, Return1NOverall, Individual1NReturn, period1NReturn)
-    currentLength = length(ReturnOverall)
-    ReturnOverall = push!(ReturnOverall, ReturnOverall[currentLength]*newPeriodReturn)
-    individualReturn = push!(individualReturn, newPeriodReturn)
-
-    current1NLength = length(Return1NOverall)
-    Return1NOverall = push!(Return1NOverall, Return1NOverall[current1NLength]*period1NReturn)
-    Individual1NReturn = push!(Individual1NReturn, period1NReturn)
-end
-
-function trackPortfolioWeights(weights, periodWeights, iteration)
-    weights[iteration, 1:10] = periodWeights
 end
