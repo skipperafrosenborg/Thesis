@@ -75,6 +75,14 @@ LassoTotalNumActiveParam = size(LassoMainDataActive)[2]
 println("Number of active parameters is ", LassoTotalNumActiveParam)
 LassoAvgParamUsage = mean(LassoParamUsage)/size(LassoMainData)[2]
 println("Most used parameter ", maximum(LassoParamUsage)/size(LassoMainData)[1])
+LassoParamUsageCopy = LassoParamUsage
+test = zeros(20,2)
+for i = 1:20
+    maxind = findmax(LassoParamUsageCopy)[2]
+    LassoParamUsageCopy[maxind] = 0
+    test[i,1] = maxind
+    println(i, " most used prediction term is index ", maxind)
+end
 println("An active parameter in LASSO is used ", mean(LassoParamUsage)/size(LassoMainData)[2]*100,"% of the time")
 
 AALRMainData[1,:,:]
@@ -93,8 +101,19 @@ AALRTotalNumActiveParam = size(AALRMainDataActive)[2]
 println("Number of active parameters is ",AALRTotalNumActiveParam)
 AALRAvgParamUsage = mean(AALRParamUsage)/size(AALRMainData[1,:,:])[2]
 println("Most used parameter ", maximum(AALRParamUsage)/size(LassoMainData)[1])
+findmax(AALRParamUsage)
+AALRParamUsageCopy = AALRParamUsage
+for i = 1:20
+    maxind = findmax(AALRParamUsageCopy)[2]
+    AALRParamUsageCopy[maxind] = 0
+    test[i,2] = maxind
+    println(i, " most used prediction term is index ", maxind)
+end
 println("An active parameter in AALR is used ", mean(AALRParamUsage)/size(AALRMainData[1,:,:])[2]*100,"% of the time")
 
+for i = 1:20
+    println("At i = ", i, " we found ", find(x -> x == test[i,1], test[:,2]))
+end
 
 #Count average number of parameters in AALR and LASSO
 LassoMainDataArr = Array{Float64}(LassoMainData)

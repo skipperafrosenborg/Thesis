@@ -1,12 +1,11 @@
 using StatsBase
 using DataFrames
 using CSV
-using JLD
 include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
 
 industry = "NoDur"
-folder = "12"
+folder = "240"
 industryArr = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 for industry = industryArr
@@ -29,7 +28,7 @@ for j = 1:10
     stringArr[j] = "gamma =$j"
 end
 
-function logStuff(VIX, raw, timeTrans, expTrans, TA)
+function logStuff(VIX, raw, timeTrans, expTrans, TA, Top25)
     timeSpan = parse(Int64,folder)
     tempString = ""
     if raw == 0
@@ -70,9 +69,16 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA)
     y_real = CSV.read(folder*"_"*tempString*"_real.CSV", delim = ',', nullable = false, header = ["Iteration",
         "Date", "Reseccion", "Real Value"], types =[Float64, Int64, Int64, Float64], datarow=2)
 
-    y_hat = CSV.read(folder*"_"*tempString*"_predicted.CSV",
-        delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
-        Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
+    if Top25 == 1
+        y_hat = CSV.read(folder*"_"*tempString*"_over25PercentPredictionTermspredicted.CSV",
+            delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
+            Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
+        tempString = tempString*"Top25Percent"
+    else
+        y_hat = CSV.read(folder*"_"*tempString*"_predicted.CSV",
+            delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
+            Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
+    end
 
     startIndex=find(x -> x == 194608, y_real[:,2])[1]
 
@@ -163,13 +169,13 @@ end
 
 function writeFile()
     counterIter = 1
-    logArr = zeros(24,8)
-    stringToAppend = Array{String}(24,1)
+    logArr = zeros(25,8)
+    stringToAppend = Array{String}(25,1)
 
     for timeTrans = 0:1
     	for expTrans = 0:1
     		for TA = 0:1
-    			logArr[counterIter,:], stringToAppend[counterIter,1] = logStuff(0, 1, timeTrans, expTrans, TA)
+    			logArr[counterIter,:], stringToAppend[counterIter,1] = logStuff(0, 1, timeTrans, expTrans, TA, 0)
                 counterIter += 1
     		end
     	end
@@ -179,15 +185,16 @@ function writeFile()
     	for timeTrans = 0:1
     		for expTrans = 0:1
     			for TA = 0:1
-    				logArr[counterIter,:], stringToAppend[counterIter,1]= logStuff(VIX, 0, timeTrans, expTrans, TA)
+    				logArr[counterIter,:], stringToAppend[counterIter,1]= logStuff(VIX, 0, timeTrans, expTrans, TA, 0)
                     counterIter += 1
     			end
     		end
     	end
     end
 
+    logArr[counterIter,:], stringToAppend[counterIter, 1] = logStuff(1, 0, 1, 0, 1, 1)
 
-    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/Summary "*folder
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/Summary New"*folder
     f = open(path*".csv", "w")
     write(f, "Dataset, Classification Rate, R^2, Mean Error, RMSE, Classification Rate Index, R^2 Index, Mean Error Index, RMSE Index\n")
     writecsv(f,hcat(stringToAppend,logArr))

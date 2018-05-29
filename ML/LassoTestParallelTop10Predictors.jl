@@ -4,7 +4,7 @@ using DataFrames
 using CSV
 
 trainingSizeInput = parse(Int64, ARGS[1])
-#trainingSizeInput = 12
+trainingSizeInput = 240
 println(typeof(trainingSizeInput))
 
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
@@ -115,6 +115,10 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 
 	# Standardize
 	standX = zScoreByColumn(mainXarr)
+
+	colNumbs = [6, 8, 23, 25, 33, 49, 50, 53, 79, 105, 107, 118, 133, 135, 177, 190, 200, 204, 217, 228, 275, 302, 343, 365, 368, 372]
+	standX = standX[:,colNumbs]
+
 	standY = mainYarr
 
 	allData = hcat(standX, standY)
@@ -122,7 +126,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	nRows = size(standX)[1]
 	println(" \nSolving Convex\n")
 
-	fileName = fileName*"_"
+	fileName = fileName*"_over25PercentPredictionTerms"
 
 	println(fileName)
 
@@ -194,7 +198,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	#writedlm(fileName*"bSolved.CSV", bSolvedArr,",")
 end
 
-
+#=
 #@time(
 	#Testing raw dataset
 for timeTrans = 0:1
@@ -216,8 +220,9 @@ for VIX = 0:1
 	end
 end
 #)
+=#
 
-#runLassos(0, 1, 0, 0, 0, 12)
+runLassos(1, 0, 0, 1, 1, 240)
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 #cd(path)

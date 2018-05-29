@@ -2,7 +2,6 @@ using JuMP
 using StatsBase
 using DataFrames
 using CSV
-using JLD
 using Plots
 include("SupportFunction.jl")
 println("Leeeeroooy Jenkins")
@@ -486,7 +485,7 @@ function getVixMacroTimeTAMostUsedVariables()
     writedlm(path*"ParametersAnalysis/VIXMacroTimeTAParameterDistribution.CSV",stepVector,",")
 
     x = find(x-> x< 0.05 && x>0.01, mean(allMat,1))
-    x = find(x-> x> 0.33, mean(allMat,1))
+    x = find(x-> x> 0.25, mean(allMat,1))
 
     for i=x
         if floor(i/28) < 13

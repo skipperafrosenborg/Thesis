@@ -181,7 +181,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
     industriesTotal = 10
     periodMean = zeros(10)
     for i = 1:10
-        periodMean[i] = mean(trainingXArrays[1][:,i])
+        periodMean[i] = mean(trainingYArrays[1][:,i])
     end
     l1, l2, l3, l4 = modelConfigRow
 
@@ -259,9 +259,11 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
     Sigma =  cov(trainX)
 
     periodMean = zeros(11)
-    for i = 1:11
-        periodMean[i] = mean(trainX[:,i])
+    for i = 1:10
+        periodMean[i] = mean(trainingYArrays[i][:,1])
     end
+
+    periodMean[11] = mean(rfRatesVec)
 
     #A=U^(T)U where U is upper triangular with real positive diagonal entries
     F = lufact(Sigma)
@@ -287,9 +289,15 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
 
     @objective(M,Min,sum(l1*q[i] + l2*ones(maxPredictors)'*z[i,:] for i=1:industriesTotal)+ l3*(sum(gamma*y[t]-sum(f[i,t] for i=1:11) for t=1:bRows)) - l4*(sum(w[11,t]*rfRatesVec[t] for t=1:bRows) + sum(w[i,t]*trainingYArrays[i][t] for i=1:10, t=1:bRows)))
 
+    periodCap = zeros(11)
+    for i = 1:10
+        periodCap[i] = maximum(trainingYArrays[i][:])
+    end
+    periodCap[11] = maximum(rfRatesVec)
+
     for i = 1:(industriesTotal+1)
         for t = 1:bRows
-            @constraint(M, (periodMean[i]+1000)*w[i,t] >= f[i,t])
+            @constraint(M, (periodMean[i]+periodCap[i])*w[i,t] >= f[i,t])
         end
     end
     for i = 1:industriesTotal
@@ -301,12 +309,14 @@ function runCEORFR(trainingXArrays, trainingYArrays, modelConfigRow, gamma, rfRa
 
     for i = 1:10
         errorArray = (trainingXArrays[i]*b[i,1:bCols[i]]-trainingYArrays[i])*(1/bRows)
-        errorSum = sum(errorArray)
+        errorSum = sum(errorArray) 
         for t = 1:bRows
             prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
             @constraint(M, prediction + errorSum >= f[i, t]) ##== originally
         end
     end
+
+
     #RFR
     for t = 1:bRows
         @constraint(M, rfRatesVec[t] >= f[11, t])

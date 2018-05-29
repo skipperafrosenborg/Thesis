@@ -65,11 +65,11 @@ modelConfig
 
 #Initialization of parameters
 w1N = repeat([1/11], outer = 11) #1/N weights
-gamma = 2.4 #risk aversion
+gamma = 4 #risk aversion
 validationPeriod = 0 # Number of periods to do parameter training
-PMatrix = zeros(nRows-trainingSize, amountOfModels) 
+PMatrix = zeros(nRows-trainingSize, amountOfModels)
 
-bestModelAmount = 5
+bestModelAmount = 1
 bestModelConfigs = zeros(bestModelAmount, 4)
 bestModelIndexes = zeros(bestModelAmount)
 
@@ -79,6 +79,8 @@ returnPerfectMatrix = zeros(nRows-trainingSize)
 
 weightsPerfect = zeros(nRows-trainingSize, 11)
 weightsCEO     = zeros(nRows-trainingSize, 11, bestModelAmount)
+expectedReturnMatrix = zeros(nRows-trainingSize, 11)
+forecastErrors = zeros(nRows-trainingSize, 11)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
@@ -106,11 +108,11 @@ end
 #Load PMatrix
 
 #modelMeans = mean(PMatrix, 1)
-bestModelConfigs[1,:] = [1 10 0.01 10]
-bestModelConfigs[2,:] = [1 100 0.01 100]
-bestModelConfigs[3,:] = [0.01 10 1 10]
-bestModelConfigs[4,:] = [0.01 100 1 100]
-bestModelConfigs[5,:] = [1 0.5 0 0]
+#bestModelConfigs[1,:] = [1 10 0.01 10]
+#bestModelConfigs[2,:] = [1 100 0.01 100]
+#bestModelConfigs[3,:] = [0.01 10 1 10]
+bestModelConfigs[1,:] = [0.01 100 1 100]
+#bestModelConfigs[5,:] = [1 0.5 0 0]
 
 for i = 1:bestModelAmount
     #bestModelIndex = indmax(modelMeans)
@@ -122,7 +124,7 @@ end
 
 
 
-inputArg1 = 83 #83 breaks the trainingSize
+inputArg1 = 0 #83 breaks the trainingSize
 inputArg1 = parse(Int64,ARGS[1])
 if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
     println("Starting CEO Validation loop")
@@ -136,10 +138,14 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             rfRatesVec = rfRates[t:(t+trainingSize-1)]
             betaArray, U = @time(runCEORFR(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma, rfRatesVec))
 
+            #betaArrayCopy = betaArray
             ##PREVIOUS
             #betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma))
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
             expectedReturns[11] = rfRates[t+trainingSize]
+            if m == 1
+                expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+            end
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
             valY = zeros(11)
             for i = 1:10
@@ -153,11 +159,14 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
+            return1N, returnCEO, wStar, forecastRow = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])] = returnCEO
             returnPerfect = returnPerfectMatrix[t]
+            if m == 1
+                forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
+            end
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
         end
@@ -178,6 +187,9 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
 
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
             expectedReturns[11] = rfRates[t+trainingSize]
+            if m == 1
+                expectedReturnMatrix[t, 1:11] = (exp.(expectedReturns)-1)*100
+            end
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
             valY = zeros(11)
             for i = 1:10
@@ -191,11 +203,14 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
+            return1N, returnCEO, wStar, forecastRow = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
             weightsCEO[t, 1:11, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])]  = returnCEO
             returnPerfect = returnPerfectMatrix[t]
+            if m == 1
+                forecastErrors[t, 1:11]  = forecastRow-((exp.(expectedReturns)-1)*100)
+            end
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
         end
@@ -210,4 +225,7 @@ writedlm(path*string(inputArg1)*"_returnPvalueOutcome1to200.csv", combinedPortfo
 for i = 1:bestModelAmount
     writedlm(path*"wightsCEO_Model"*string(i)*"_"*string(inputArg1)*".csv",weightsCEO[:,:,i], ",")
 end
+
+combinedPortfolios2 = hcat(expectedReturnMatrix, forecastErrors)
+writedlm(path*string(inputArg1)*"_forecastsAndErrors1to200.csv", combinedPortfolios2, ",")
 println("Finished Everything")
