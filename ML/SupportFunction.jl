@@ -130,7 +130,14 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved, HCArray)
 	oldBetaVector = copy(betaVector)
 	curError = twoNormRegressionError(X, y, betaVector) - twoNormRegressionError(X, y, oldBetaVector) + 10000
 
+	counter = 0
+
 	while (iter < 2000 && curError > epsilon)
+		if counter == 100
+			println("Broke in iteration ",iter," due to counter")
+			break
+		end
+
 		oldBetaVector = copy(betaVector)
 
 		#Calculate delta(g(beta))
@@ -140,6 +147,12 @@ function gradDecent(X, y, L, epsilon, kMax, HC, bSolved, HCArray)
 		betaVector = copy(shrinkValuesH(betaVector+1/L*gradBeta, kMax, HCArray))
 		if find(oldBetaVector) != find(betaVector)
 			#println("New beta")
+		end
+
+		if find(oldBetaVector) == find(betaVector)
+			counter +=1
+		else
+			count = 0
 		end
 
 		curError = abs.(twoNormRegressionError(X, y, oldBetaVector) - twoNormRegressionError(X, y, betaVector))

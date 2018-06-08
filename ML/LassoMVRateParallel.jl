@@ -26,15 +26,15 @@ industriesTotal = length(industries)
 
 modelMatrix = zeros(industriesTotal, possibilities)
 noDurModel = [1 0 1 1 1]
-testModel = [0 1 0 0 0]
+testModel = [1 0 0 1 1]
 for i=1:industriesTotal
     modelMatrix[i, :] = testModel
 end
 ##START OF A METHOD
 
-path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
-#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+#path = "$(homedir())/Documents/GitHub/Thesis/Data/IndexDataDiff/"
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 XArrays = Array{Array{Float64, 2}}(industriesTotal)
 YArrays = Array{Array{Float64, 2}}(industriesTotal)
 
@@ -56,32 +56,11 @@ rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
 
 
-#GENERATING PERFECT RESULTS WITHOUT RISK FREE RATE
-#=
-returnPerfectMatrix = zeros(nRows-trainingSize)
-weightsPerfect = zeros(nRows-trainingSize, 10)
-path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/PerfectReturns/"
-for g = 1:10
-    fileName = "Perfect"
-    gammaRisk = riskAversions[g]
-    for t=1:840
-        println("time $t / 840, gammaRisk $g / 10 ")
-        trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
-        valY = zeros(10)
-        for i = 1:10
-            valY[i] = validationY[i][1]
-        end
-        weightsPerfect[t, :], returnPerfectMatrix[t] = findPerfectResults(trainingXArrays, valY, valY, gammaRisk)
-    end
-    fileName = fileName*"_train"*string(trainingSize)*"_"*string(gammaRisk)
-    writedlm(fileName*"Weights.csv", weightsPerfect,",")
-    writedlm(fileName*"Returns.csv", returnPerfectMatrix,",")
-end
-=#
 #GENERATING PERFECT RESULTS WITH RISK FREE RATE
 returnPerfectMatrix = zeros(nRows-trainingSize)
 weightsPerfect = zeros(nRows-trainingSize, 11)
-path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/Perfect RFR Returns/"
+#path = "C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results/Perfect RFR Returns/"
+fileName = "/zhome/9f/d/88706/SpecialeCode/Results/MV/PointPrediction/"
 for g = 1:10
     fileName = "PerfectRFR"
     gammaRisk = riskAversions[g]
@@ -114,7 +93,7 @@ for g = 1:10
     for t = 1:840#(nRows-trainingSize-1)
         println("time $t / $total, gammaRisk $g / 10 ")
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
-        expectedReturns = zeros(industriesTotal)
+        expectedReturns = zeros(industriesTotal+1)
         for i = 1:industriesTotal
             #ISRsquared, Indicator, estimate, bSolved = generatSolveAndProcess(trainingXArrays[i], trainingYArrays[i], validationXRows[i][1,:], validationY[i][1], gamma)
             #expectedReturns[i] = estimate
@@ -132,7 +111,7 @@ for g = 1:10
         expectedReturns[11] = rfRates[t+trainingSize]
 
         expectedReturnMatrix[t, 1:10] = (exp.(expectedReturns[1:10])-1)*100
-        expectedReturnMatrix[t, 11] = expectedReturns[11]
+        expectedReturnMatrix[t, 11]   = exp(expectedReturns[11])-1
         #=
         #Economic constraint; only focus on positive expected returns
         for i = 1:10

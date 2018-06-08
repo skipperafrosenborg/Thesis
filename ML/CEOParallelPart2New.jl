@@ -64,12 +64,12 @@ end
 modelConfig
 
 #Initialization of parameters
-w1N = repeat([1/11], outer = 11) #1/N weights
-gamma = 2 #risk aversion
+w1N = repeat([1/10], outer = 10) #1/N weights
+gammaArr = linspace(0,4,16) #2.4 #risk aversion
 validationPeriod = 0 # Number of periods to do parameter training
 PMatrix = zeros(nRows-trainingSize, amountOfModels)
 
-bestModelAmount = 5
+bestModelAmount = 1
 bestModelConfigs = zeros(bestModelAmount, 4)
 bestModelIndexes = zeros(bestModelAmount)
 
@@ -77,16 +77,16 @@ return1NMatrix = zeros(nRows-trainingSize)
 returnCEOMatrix = zeros(nRows-trainingSize, bestModelAmount)
 returnPerfectMatrix = zeros(nRows-trainingSize)
 
-weightsPerfect = zeros(nRows-trainingSize, 11)
-weightsCEO     = zeros(nRows-trainingSize, 11, bestModelAmount)
-expectedReturnMatrix = zeros(nRows-trainingSize, 11)
-forecastErrors = zeros(nRows-trainingSize, 11)
+weightsPerfect = zeros(nRows-trainingSize, 10)
+weightsCEO     = zeros(nRows-trainingSize, 10, bestModelAmount)
+expectedReturnMatrix = zeros(nRows-trainingSize, 10)
+forecastErrors = zeros(nRows-trainingSize, 10)
 
 rfRates = loadRiskFreeRate("NoDur", path)
 rfRates = rfRates[:,1]
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/RFR/VIXTimeTA2.4/"
-path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
+path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"
 weightsPerfect = Array{Float64}(CSV.read(path*"weightsPerfect.csv",header=false, datarow=1, nullable=false))
 returnPerfectMatrix = Array{Float64}(CSV.read(path*"returnPerfectMatrix.csv", header=false, datarow=1, nullable=false))
 #=
@@ -108,11 +108,7 @@ end
 #Load PMatrix
 
 #modelMeans = mean(PMatrix, 1)
-bestModelConfigs[1,:] = [1 0.5  0.25  1]
-bestModelConfigs[2,:] = [1 0.5  0.25  2.5]
-bestModelConfigs[3,:] = [1 0.5  0.25  10]
-bestModelConfigs[4,:] = [1 0.5  0.25  50]
-bestModelConfigs[5,:] = [1 0.5  0.25  100]
+bestModelConfigs[1,:] = [1 0.5  0.25  100] #to change!
 
 for i = 1:bestModelAmount
     #bestModelIndex = indmax(modelMeans)
@@ -123,6 +119,8 @@ for i = 1:bestModelAmount
 end
 
 
+for l = 1:16
+gamma gammaArr[l]
 
 inputArg1 = 0 #83 breaks the trainingSize
 inputArg1 = parse(Int64,ARGS[1])
@@ -133,40 +131,40 @@ if 10+validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
 
         for m = 1:bestModelAmount
-            expectedReturns = zeros(11)
+            expectedReturns = zeros(10)
             #CHANGES
             rfRatesVec = rfRates[t:(t+trainingSize-1)]
-            betaArray, U = @time(runCEORFR(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma, rfRatesVec))
+            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma))
 
             #betaArrayCopy = betaArray
             ##PREVIOUS
             #betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma))
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
-            expectedReturns[11] = rfRates[t+trainingSize]
+            #expectedReturns[11] = rfRates[t+trainingSize]
             if m == 1
                 expectedReturnMatrix[t, 1:10] = (exp.(expectedReturns[1:10])-1)*100
-                expectedReturnMatrix[t, 11] = (exp.(expectedReturns[11])-1)
+                #expectedReturnMatrix[t, 11] = (exp.(expectedReturns[11])-1)
             end
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
-            valY = zeros(11)
+            valY = zeros(10)
             for i = 1:10
                 valY[i] = validationY[i][1]
             end
-            valY[11] = rfRates[t+trainingSize]
+            #valY[11] = rfRates[t+trainingSize]
 
-            rfRatesVec = rfRates[t:(t+trainingSize-1)]
-            trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+            #rfRatesVec = rfRates[t:(t+trainingSize-1)]
+            trainX = trainingXArrays[1][:,1:10]
             Sigma =  cov(trainX)
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar, forecastRow = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
-            weightsCEO[t, 1:11, Int64(m)] = wStar
+            return1N, returnCEO, wStar, forecastRow = performMVOptimization(expectedReturns, U, gamma, valY, valY)
+            weightsCEO[t, 1:10, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
             returnCEOMatrix[t, Int64(bestModelIndexes[m])] = returnCEO
             returnPerfect = returnPerfectMatrix[t]
             if m == 1
-                forecastErrors[t, 1:11]  = forecastRow-expectedReturnMatrix[t,:]
+                forecastErrors[t, 1:10]  = forecastRow-expectedReturnMatrix[t,:]
             end
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
@@ -178,40 +176,40 @@ elseif validationPeriod+(10*inputArg1) <= nRows-trainingSize-2
         trainingXArrays, trainingYArrays, validationXRows, validationY, OOSXArrays, OOSYArrays, OOSRow, OOSY = createDataSplits(XArrays, YArrays, t, trainingSize)
 
         for m = 1:bestModelAmount
-            expectedReturns = zeros(11)
+            expectedReturns = zeros(10)
             #CHANGES
             rfRatesVec = rfRates[t:(t+trainingSize-1)]
-            betaArray, U = @time(runCEORFR(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma, rfRatesVec))
+            betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, bestModelConfigs[m, :], gamma))
 
+            #betaArrayCopy = betaArray
             ##PREVIOUS
             #betaArray, U = @time(runCEO(trainingXArrays, trainingYArrays, modelConfig[m, :], gamma))
-
             expectedReturns[1:10] = generateExpectedReturns(betaArray, trainingXArrays, trainingYArrays, validationXRows)
-            expectedReturns[11] = rfRates[t+trainingSize]
+            #expectedReturns[11] = rfRates[t+trainingSize]
             if m == 1
                 expectedReturnMatrix[t, 1:10] = (exp.(expectedReturns[1:10])-1)*100
-                expectedReturnMatrix[t, 11] = (exp.(expectedReturns[11])-1)
+                #expectedReturnMatrix[t, 11] = (exp.(expectedReturns[11])-1)
             end
             #Need to send OOSRow to mean-variance optimization to get "perfect information" since validationY is the values in OOSRow[1:10]
-            valY = zeros(11)
+            valY = zeros(10)
             for i = 1:10
                 valY[i] = validationY[i][1]
             end
-            valY[11] = rfRates[t+trainingSize]
+            #valY[11] = rfRates[t+trainingSize]
 
-            rfRatesVec = rfRates[t:(t+trainingSize-1)]
-            trainX = hcat(trainingXArrays[1][:,1:10], rfRatesVec)
+            #rfRatesVec = rfRates[t:(t+trainingSize-1)]
+            trainX = trainingXArrays[1][:,1:10]
             Sigma =  cov(trainX)
             F = lufact(Sigma)
             U = F[:U]  #Cholesky factorization of Sigma
 
-            return1N, returnCEO, wStar, forecastRow = performMVOptimizationRISK(expectedReturns, U, gamma, valY, valY)
-            weightsCEO[t, 1:11, Int64(m)] = wStar
+            return1N, returnCEO, wStar, forecastRow = performMVOptimization(expectedReturns, U, gamma, valY, valY)
+            weightsCEO[t, 1:10, Int64(m)] = wStar
             return1NMatrix[t]      = return1N
-            returnCEOMatrix[t, Int64(bestModelIndexes[m])]  = returnCEO
+            returnCEOMatrix[t, Int64(bestModelIndexes[m])] = returnCEO
             returnPerfect = returnPerfectMatrix[t]
             if m == 1
-                forecastErrors[t, 1:11]  = forecastRow-expectedReturnMatrix[t,:]
+                forecastErrors[t, 1:10]  = forecastRow-expectedReturnMatrix[t,:]
             end
             println("1N returns is $return1N, returnPerfect is $returnPerfect and returnCEO is $returnCEO")
             PMatrix[t, Int64(bestModelIndexes[m])] = calculatePvalue(return1N, returnPerfect, returnCEO)
@@ -222,7 +220,7 @@ end
 combinedPortfolios = hcat(returnPerfectMatrix[1:nRows-trainingSize-2, 1], return1NMatrix[1:nRows-trainingSize-2, 1],
     returnCEOMatrix[1:nRows-trainingSize-2, Array{Int64}(bestModelIndexes)], PMatrix[1:nRows-trainingSize-2, Array{Int64}(bestModelIndexes)])
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/CEO/"
-path = "/zhome/9f/d/88706/SpecialeCode/Results/CEORFR/"
+path = "/zhome/9f/d/88706/SpecialeCode/Results/CEO/"*string(l)*"/"
 writedlm(path*string(inputArg1)*"_returnPvalueOutcome1to200.csv", combinedPortfolios, ",")
 for i = 1:bestModelAmount
     writedlm(path*"wightsCEO_Model"*string(i)*"_"*string(inputArg1)*".csv",weightsCEO[:,:,i], ",")
@@ -230,4 +228,5 @@ end
 
 combinedPortfolios2 = hcat(expectedReturnMatrix, forecastErrors)
 writedlm(path*string(inputArg1)*"_forecastsAndErrors1to200.csv", combinedPortfolios2, ",")
+end
 println("Finished Everything")

@@ -44,7 +44,7 @@ s = Array{String}(s)
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"
 path = path*"Results/IndexData/LassoTest/NoDur/"
 summary = CSV.read(path*"Summary "*folder*".csv",nullable = false)
-minIndex = summary[end,end]
+minIndex = summary[end-1,end]
 
 
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/"

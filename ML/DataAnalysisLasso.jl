@@ -9,7 +9,7 @@ folder = "240"
 industryArr = ["NoDur", "Durbl", "Manuf", "Enrgy", "HiTec", "Telcm", "Shops", "Hlth", "Utils", "Other"]
 path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
 for industry = industryArr
-    for i = [12, 24, 36, 48, 120, 240]
+    for i = [240]
         println("Industry ",industry," time period ",i)
         path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"*industry*"/"*folder*"-1/"
         folder = string(i)
@@ -73,7 +73,7 @@ function logStuff(VIX, raw, timeTrans, expTrans, TA, Top25)
         y_hat = CSV.read(folder*"_"*tempString*"_over25PercentPredictionTermspredicted.CSV",
             delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
             Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64], datarow=2)
-        tempString = tempString*"Top25Percent"
+        tempString = tempString*"_over25PercentPredictionTerms"
     else
         y_hat = CSV.read(folder*"_"*tempString*"_predicted.CSV",
             delim = ',', nullable=false, header=vcat("Iteration","Date","Recession",stringArr), types=[Float64, Int64, Int64, Float64,
@@ -200,3 +200,57 @@ function writeFile()
     writecsv(f,hcat(stringToAppend,logArr))
     close(f)
 end
+
+#SpeedTest analysis
+path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/Speed Benchmark Proffs/Final copy/"
+testArr = [1, 101, 201, 301, 401, 501]
+outArr = zeros(6,4)
+for i = 1:6
+    test1 = CSV.read(path*string(testArr[i])*"bestNorm.csv", delim="\t", types=fill(Float64,3),datarow = 1, header=false, nullable=false)
+    test2 = CSV.read(path*string(testArr[i])*"bestWarm.csv", delim="\t", types=fill(Float64,3),datarow = 1, header=false, nullable=false)
+    test3 = CSV.read(path*string(testArr[i])*"bestMath.csv", delim="\t", types=fill(Float64,3),datarow = 1, header=false, nullable=false)
+    test4 = CSV.read(path*string(testArr[i])*"bestHeuristic.csv", delim="\t", types=fill(Float64,3),datarow = 1, header=false, nullable=false)
+
+    println(indmin(Array(test1)),"\t",indmin(Array(test2)),"\t",indmin(Array(test3)),"\t",indmin(Array(test4)))
+
+    outArr[i,1] = minimum(Array(test1))
+    outArr[i,2] = minimum(Array(test2))
+    outArr[i,3] = minimum(Array(test3))
+    outArr[i,4] = minimum(Array(test4))
+end
+
+
+#Looping scheme
+toPlot = zeros(100,5)
+valuesToStore = zeros(100*5)
+start = [0.1, 0.5, 1 ,2, 10]
+for i = 1:10
+    println(start)
+    toPlot[i,:]=start
+    for j = 1:5
+        valuesToStore[j+(i-1)*5] = start[j]
+    end
+    bestIndx = 5#rand(1:5)
+    best = start[bestIndx]
+
+    if bestIndx == 1
+        min = start[1]*0
+        max = start[2]
+    elseif bestIndx == 5
+        min = start[4]
+        max = start[5]*2
+    else
+        min = start[bestIndx-1]
+        max = start[bestIndx+1]
+    end
+
+    start[1] = best-(best-min)*0.8
+    start[2] = best-(best-min)*0.2
+    start[3] = best
+    start[4] = best+(max-best)*0.2
+    start[5] = best+(max-best)*0.8
+
+    toPlot[i,:] = start
+end
+plot(toPlot, title="Industry Overview", linewidth=2)
+#plotlyjs()
