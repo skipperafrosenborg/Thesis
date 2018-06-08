@@ -535,3 +535,29 @@ summary(model) #99.9% significant, positive - noDur is the one to predict curren
 
 model = lm(outputData$outputY ~ outputData$Durbl)
 summary(model) #99.9% significant, positive - noDur is the one to predict currently
+
+
+
+###### ECONOMIC RECESSIONS #####
+
+## Setting packages
+library(MASS)
+library(stats)
+library(tseries)
+library(forecast)
+library(lubridate)
+library(date)
+library(zoo)
+library(marima)
+library(vars)
+
+
+setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results")
+data = read.csv("pvaluesOverallRecession.csv", header =T, sep =";")
+colnames(data)[1] ="All"
+names(data)
+ks.test(data$All, data$Recession, alternative = "less")
+ks.test(data$Recession, data$All, alternative = "greater")
+?t.test
+?ks.test
+t.test(data$All, data$Recession, alternative = "less")
