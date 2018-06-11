@@ -497,7 +497,16 @@ function getVixMacroTimeTAMostUsedVariables()
     mean(allMat,1)[x]
 end
 
-
+function getSuperSummary()
+    tempData = zeros(25,8)
+    path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Results/IndexData/LassoTest/"
+    i="NoDur"
+    for i in industryArr
+        tempData += Array{Float64}(CSV.read(path*i*"/Summary New240.csv",nullable=false)[:,2:end])
+    end
+    tempData = tempData/10
+    writedlm(path*"SuperSummaryNew.csv",tempData,",")
+end
 
 
 

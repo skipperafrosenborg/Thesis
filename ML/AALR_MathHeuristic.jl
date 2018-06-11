@@ -4,7 +4,6 @@ using Gurobi
 using StatsBase
 using DataFrames
 using CSV
-using Bootstrap
 include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
@@ -15,10 +14,10 @@ println("Leeeeroooy Jenkins")
 #path = "$(homedir())/Documents/GitHub/Thesis/Data"
 
 #Skipper's path
-path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff"
+#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff"
 
 #HPC path
-#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
+path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
 ### Load data ###
 #mainData = loadIndexDataNoDur(path)
@@ -118,7 +117,7 @@ gammaArray = log10.(logspace(0.001, 5, amountOfGammas))
 function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
     # Initialise values
     best3Beta = zeros(3,bCols+3)
-    gammaArray = log10.(logspace(0.01, 5, 3))
+    gammaArray = log10.(logspace(5, 0.01, 3))
     println("Remember to check gammaArray line 121")
     bSolved = zeros(bCols,1)
     bestObjtives = zeros(kmax, length(gammaArray))
@@ -148,7 +147,7 @@ function solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart)
         	@variable(stage2Model, v[1:bCols], start = 0) # auxiliary variables for abs
 
             # Set warmstart values
-            if warmstart == true
+            if warmstart == true || g>1
                 for j in find(bSolved)
     				setvalue(b[j], bSolved[j])
     			    setvalue(v[j], abs(bSolved[j]))
@@ -242,11 +241,10 @@ end
 function solveAndLogForAllKHeuristics(kmax, standXVali, standYVali, r)
     # Initialise values
     best3Beta = zeros(3,bCols+3)
-    gammaArray = log10.(logspace(0.01, 5, 3))
-    println("Remember to check gammaArray line 121")
+    gammaArray = log10.(logspace(5, 0.01, 3))
     bSolved = zeros(bCols,1)
     bestObjtives = zeros(kmax, length(gammaArray))
-    println("Warmstart heuristics")
+    #println("Warmstart heuristics")
 
 
     HC = cor(standX)
@@ -268,118 +266,113 @@ function solveAndLogForAllKHeuristics(kmax, standXVali, standYVali, r)
     end
     HCArray = HCArray[1:find(x -> x==0,HCArray[:,1])[1]-1,:]
 
-	for i = 8:kmax
+	for i = 1:kmax
+        bSolved = gradDecent(standX, zscore(standY), 100000, 1e-3, i, HC, 0, HCArray)
+        tempX = find(bSolved)
+        bSolved = zeros(bSolved)
+        tempbSolved = inv(standX[:,tempX]'*standX[:,tempX])*standX[:,tempX]'*standY
+        bSolved[tempX] = tempbSolved
+
         for g in 1:length(gammaArray)
 			gamma = gammaArray[g]
-            for v = 1:50
-                bSolved = gradDecent(standX, zscore(standY), 100000, 1e-3, i, HC, 0, HCArray)
-                find(bSolved)
 
-            	HCPairCounter = 0
+            find(bSolved)
 
-                #println("Building model")
-            	#Define parameters and model
-            	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 10, OutputFlag = 1, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40));
+        	HCPairCounter = 0
 
-            	#Define variables
-            	@variable(stage2Model, b[1:bCols], start = 0) #Beta values
+            #println("Building model")
+        	#Define parameters and model
+        	stage2Model = JuMP.Model(solver = GurobiSolver(TimeLimit = 30, OutputFlag = 1, Threads = 2, PreMIQCPForm=0, MIPFocus=1, ImproveStartTime=40));
 
-            	#Define binary variable (5b)
-            	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin, start = 0)
+        	#Define variables
+        	@variable(stage2Model, b[1:bCols], start = 0) #Beta values
 
-            	@variable(stage2Model, v[1:bCols], start = 0) # auxiliary variables for abs
+        	#Define binary variable (5b)
+        	@variable(stage2Model, 0 <= z[1:bCols] <= 1, Bin, start = 0)
 
-                # Set warmstart values
-                for j in find(bSolved)
-    				setvalue(b[j], bSolved[j])
-    			    setvalue(v[j], abs(bSolved[j]))
-    				setvalue(z[j], 1)
-    			end
+        	@variable(stage2Model, v[1:bCols], start = 0) # auxiliary variables for abs
 
-                if v == 2
-                    bSolved = 0
-                    for j in find(bSolved)
-        				setvalue(b[j], bSolved[j])
-        			    setvalue(v[j], abs(bSolved[j]))
-        				setvalue(z[j], 0)
+            # Set warmstart values
+            for j in find(bSolved)
+				setvalue(b[j], bSolved[j])
+			    setvalue(v[j], abs(bSolved[j]))
+				setvalue(z[j], 1)
+			end
+
+        	@variable(stage2Model, T) #First objective term
+        	@variable(stage2Model, G) #Second objective term
+
+        	#Define objective function (5a)
+        	@objective(stage2Model, Min, T+G)
+
+            @constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
+
+        	#Define constraints (5c)
+        	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z) #from 0 to bCols -1
+        	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z) #from bCols to 2bCols-1
+
+        	#Second objective term
+        	@constraint(stage2Model, 1*b .<= v) #from 2bCols to 3bCols-1
+        	@constraint(stage2Model, -1*b .<= v) #from 3bCols to 4bCols-1
+
+
+        	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
+            @constraint(stage2Model, gammaConstr, gamma*ones(bCols)'*v <= G) #4bCols
+
+            #oneNorm = sum(v[i] for i=1:bCols)
+            #@constraint(stage2Model, gammaConstr, gamma*oneNorm <= G) #4bCols
+
+        	#Define kmax constraint (5d)
+        	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= i) #4bCols+1
+
+        	#Constraint 5f - can only select one of a pair of highly correlated features
+        	rho = 0.8
+        	for k=1:bCols
+        		for j=1:bCols
+        			if k != j
+        				if HC[k,j] >= rho
+        					HCPairCounter += 1
+        					@constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
+        				end
         			end
-                end
-
-            	@variable(stage2Model, T) #First objective term
-            	@variable(stage2Model, G) #Second objective term
-
-            	#Define objective function (5a)
-            	@objective(stage2Model, Min, T+G)
-
-                @constraint(stage2Model, soc, norm( [1-T;2*(standX*b-standY)] ) <= 1+T)
-
-            	#Define constraints (5c)
-            	@constraint(stage2Model, conBigMN, -1*b .<= bigM*z) #from 0 to bCols -1
-            	@constraint(stage2Model, conBigMP,  1*b .<= bigM*z) #from bCols to 2bCols-1
-
-            	#Second objective term
-            	@constraint(stage2Model, 1*b .<= v) #from 2bCols to 3bCols-1
-            	@constraint(stage2Model, -1*b .<= v) #from 3bCols to 4bCols-1
+        		end
+        	end
 
 
-            	#gamma[g]*oneNorm <= G ---> -G <= -gamma[g]*oneNorm --> G >= gamma[g]*oneNorm
-                @constraint(stage2Model, gammaConstr, gamma*ones(bCols)'*v <= G) #4bCols
+        	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
+        	for j=1:(nCols-1)
+        		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1) #from (4bCols+1+HCPairCounter) to (4bCols+1+HCPairCounter+nCols)
+        	end
 
-                #oneNorm = sum(v[i] for i=1:bCols)
-                #@constraint(stage2Model, gammaConstr, gamma*oneNorm <= G) #4bCols
+        	#Adding empty cuts to possibly contain cuts. Can generate a maximum of 6 cuts for
+        	#each stage 3 and default value is 3 iterations between stage 2 and stage 3,
+        	#so 18 empty constraints are added + 1 for fixing the solution
+        	nEmptyCuts = 19
+        	zOnes = ones(bCols)
+        	for c = 1:nEmptyCuts
+        		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
+        	end
 
-            	#Define kmax constraint (5d)
-            	@constraint(stage2Model, kMaxConstr, sum(z[j] for j=1:bCols) <= i) #4bCols+1
+			#Solve Stage 2 model
+            solve(stage2Model)
+            bSolved = getvalue(b)
+            bSolMatrix[r,Int64((i-1)*amountOfGammas+g),:] = bSolved
 
-            	#Constraint 5f - can only select one of a pair of highly correlated features
-            	rho = 0.8
-            	for k=1:bCols
-            		for j=1:bCols
-            			if k != j
-            				if HC[k,j] >= rho
-            					HCPairCounter += 1
-            					@constraint(stage2Model,z[k]+z[j] <= 1) #from 4bCols+1 to (4bCols+1+HCPairCounter)
-            				end
-            			end
-            		end
-            	end
+            SSres = sum((standY[i]-(standX[i,:]'*bSolved))^2 for i=1:length(standY))
+            ISRSquared[r,Int64((i-1)*amountOfGammas+g)] = 1 - SSres/SSTO
+			#Get solution and calculate R^2
+			#bSolved = sol[1:bCols]
+			#zSolved = sol[1+bCols:2*bCols]
 
+            obj = Gurobi.getobjval(internalmodel(stage2Model))
+            bound = Gurobi.getobjbound(internalmodel(stage2Model))
+            bestObjtives[Int64(i),Int64(g)] = obj
+            gap = abs.(-1+bound/obj)
 
-            	#Constraint (5g) - only one transformation allowed (x, x^2, log(x) or sqrt(x))
-            	for j=1:(nCols-1)
-            		@constraint(stage2Model, z[j]+z[j+(nCols-1)]+z[j+2*(nCols-1)]+z[j+3*(nCols-1)] <= 1) #from (4bCols+1+HCPairCounter) to (4bCols+1+HCPairCounter+nCols)
-            	end
+            prediction = standXVali*bSolved
 
-            	#Adding empty cuts to possibly contain cuts. Can generate a maximum of 6 cuts for
-            	#each stage 3 and default value is 3 iterations between stage 2 and stage 3,
-            	#so 18 empty constraints are added + 1 for fixing the solution
-            	nEmptyCuts = 19
-            	zOnes = ones(bCols)
-            	for c = 1:nEmptyCuts
-            		@constraint(stage2Model, sum(zOnes[i]*z[i] for i=1:bCols) <= bCols) #(4bCols+1+HCPairCounter+nCols) to (4bCols+1+HCPairCounter+nCols+18)
-            	end
-
-    			#Solve Stage 2 model
-                solve(stage2Model)
-                bSolved = getvalue(b)
-                bSolMatrix[r,Int64((i-1)*amountOfGammas+g),:] = bSolved
-
-                SSres = sum((standY[i]-(standX[i,:]'*bSolved))^2 for i=1:length(standY))
-                ISRSquared[r,Int64((i-1)*amountOfGammas+g)] = 1 - SSres/SSTO
-    			#Get solution and calculate R^2
-    			#bSolved = sol[1:bCols]
-    			#zSolved = sol[1+bCols:2*bCols]
-
-                obj = Gurobi.getobjval(internalmodel(stage2Model))
-                bound = Gurobi.getobjbound(internalmodel(stage2Model))
-                bestObjtives[Int64(i),Int64(g)] = obj
-                gap = abs.(-1+bound/obj)
-
-                prediction = standXVali*bSolved
-
-    			println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g \t obj = $obj, bound = $bound, gap = $gap")
-                realArr[r,1] = standYVali[1]
-            end
+			println("Prediction =$prediction\t Real =$standYVali\t kMax =$i \t gamma =$g \t obj = $obj, bound = $bound, gap = $gap")
+            realArr[r,1] = standYVali[1]
 		end
 		#printNonZeroValues(bSolved)
 	end
@@ -468,7 +461,6 @@ function getBetaAndGamma(standX,standY, kmax)
 	k = countnz(bSolved)
 	return bSolved, k
 end
-
 
 """
 Build and solve function for stage 2 used in math heuristic
@@ -581,7 +573,7 @@ end
 function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
 	status = :Optimal
     HC = cor(standX)
-    gammaArray = log10.(logspace(0.01, 5, 3))
+    gammaArray = log10.(logspace(5, 0.01, 3))
     bestObjtives = zeros(kmax, length(gammaArray))
 	for i in 1:kmax
 		lassoBsolved, k = getBetaAndGamma(standX,standY, i)   #Find warmstarted solution
@@ -754,16 +746,6 @@ function solveAndLogForAllKMath(kmax, standXVali, standYVali, r)
     return bestObjtives
 end
 
-#return #best3Beta, model
-
-#="""
-For each of the three beta sets produced, we will test for significance
-and condition number of model to see if cuts are necessary
-High or low condition number doesn't mean that one correlation matrix is "better"
-than the other. All it means is that variables are more correlated or less.
-Whether it's good or not depends on the application.
-"""=#
-
 function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     nRows = size(standX)[1]
 
@@ -774,21 +756,26 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
     #mathheuristic
     warmstart = false
-	bestObjtivesNormal = @time(solveAndLogForAllKMath(kmax, standXVali, standYVali, r))
+	bestObjtivesMath = @time(solveAndLogForAllKMath(kmax, standXVali, standYVali, r))
     println("This was time for mathheuristic")
 
     #Nonwarmstart
     warmstart = false
-    bestObjtivesWarmstart = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
+    bestObjtivesNormal = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     print("This was time for non warmstart")
     println("")
 
     #lasso warmstart
     warmstart = true
-    bestObjtivesMath = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
+    bestObjtivesWarmstart = @time(solveAndLogForAllK(kmax, standXVali, standYVali, r, warmstart))
     println("This was time for warmstart")
 
-    return bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath
+    #Heuristic warmstart
+    println("Fucking start here!")
+    bestObjtivesHeuristic = @time(solveAndLogForAllKHeuristics(kmax, standXVali, standYVali, r))
+    println("This was time for heuristc")
+
+    return bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath, bestObjtivesHeuristic
 end
 
 SSTO = sum((standY[i]-mean(standY[:]))^2 for i=1:length(standY))
@@ -811,9 +798,10 @@ for r = 1:100:501#(nRows-trainingSize-predictions)
 	standY = allData[r:(trainingSize+r), bCols+1]
 	standXVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), 1:bCols]
 	standYVali  = allData[(trainingSize+r+1):(trainingSize+r+predictions), bCols+1]
-	bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath  = AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
+	bestObjtivesNormal, bestObjtivesWarmstart, bestObjtivesMath, bestObjtivesHeuristic  = AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
 
     writedlm(path*string(r)*"bestNorm.csv",bestObjtivesNormal)
     writedlm(path*string(r)*"bestWarm.csv",bestObjtivesWarmstart)
     writedlm(path*string(r)*"bestMath.csv",bestObjtivesMath)
+    writedlm(path*string(r)*"bestHeuristic.csv",bestObjtivesHeuristic)
 end

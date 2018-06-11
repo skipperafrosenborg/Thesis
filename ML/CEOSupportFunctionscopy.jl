@@ -122,12 +122,12 @@ function performMVOptimization(expectedReturns, U, gamma, Xrow, Yvalues)
     solve(M)
     wStar = getvalue(w)
 
-    forecastRow = (exp.(Xrow)-1)*100
+    forecastRow = (exp.(Xrow')-1)*100
 
-    periodReturn = forecastRow'*wStar
-    period1NReturn = forecastRow'*w1N
+    periodReturn = forecastRow*wStar
+    period1NReturn = forecastRow*w1N
 
-    return period1NReturn, periodReturn, wStar, forecastRow
+    return period1NReturn, periodReturn, wStar
 end
 
 
@@ -185,22 +185,14 @@ end
 function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
     industriesTotal = 10
     periodMean = zeros(10)
-
+    for i = 1:10
+        periodMean[i] = mean(trainingYArrays[1][:,i])
+    end
     l1, l2, l3, l4 = modelConfigRow
 
     maxPredictors = 1412
     bCols = floor.(Int,zeros(industriesTotal))
     Sigma =  cov(trainingXArrays[1][:,1:10])
-
-    periodMean = zeros(10)
-    for i = 1:10
-        periodMean[i] = mean(trainingYArrays[i][:,1])
-    end
-
-    periodCap = zeros(10)
-    for i = 1:10
-        periodCap[i] = maximum(trainingYArrays[i][:])
-    end
 
     #A=U^(T)U where U is upper triangular with real positive diagonal entries
     F = lufact(Sigma)
@@ -228,7 +220,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
 
     for i = 1:industriesTotal
         for t = 1:bRows
-            @constraint(M, (periodMean[i]+periodCap[i])*w[i,t] >= f[i,t])
+            @constraint(M, (periodMean[i]+1000)*w[i,t] >= f[i,t])
         end
     end
     for i = 1:industriesTotal
@@ -243,7 +235,7 @@ function runCEO(trainingXArrays, trainingYArrays, modelConfigRow, gamma)
         errorSum = sum(errorArray)
         for t = 1:bRows
             prediction = trainingXArrays[i][t, :]'*b[i,1:bCols[i]]
-            @constraint(M, prediction - errorSum >= f[i, t]) ##== originally
+            @constraint(M, prediction + errorSum >= f[i, t]) ##== originally
         end
     end
 
