@@ -558,6 +558,71 @@ colnames(data)[1] ="All"
 names(data)
 ks.test(data$All, data$Recession, alternative = "less")
 ks.test(data$Recession, data$All, alternative = "greater")
+ks.test(data$Recession, data$All)
 ?t.test
 ?ks.test
 t.test(data$All, data$Recession, alternative = "less")
+
+##### POS/NEG RESULTS #####
+
+## Setting packages
+library(MASS)
+library(stats)
+library(tseries)
+library(forecast)
+library(lubridate)
+library(date)
+library(zoo)
+library(marima)
+library(vars)
+
+
+setwd("C:/Users/ejb/Documents/GitHub/Thesis/Data/MonthlyReturns/Results")
+data = read.csv("posNegative.csv", header =T, sep = ";")
+colnames(data)[1] = "CEORFR"
+colnames(data)[2] = "PPDRFR"
+colnames(data)[3] = "SAARFR"
+
+dataCols = nrow(data)
+
+CEOPos = c()
+CEONeg = c()
+#Filling them for CEO
+for(i in 1:dataCols){
+  if (data$CEORFR[i] > 0){
+    CEOPos = c(CEOPos, data$CEORFR[i])
+  } else {
+    CEONeg = c(CEONeg, data$CEORFR[i])
+  }
+}
+
+PPDPos = c()
+PPDNeg = c()
+#Filling them for CEO
+for(i in 1:dataCols){
+  if (data$CEORFR[i] > 0){
+    PPDPos = c(PPDPos, data$PPDRFR[i])
+  } else {
+    PPDNeg = c(PPDNeg, data$PPDRFR[i])
+  }
+}
+
+SAAPos = c()
+SAANeg = c()
+#Filling them for CEO
+for(i in 1:dataCols){
+  if (data$SAARFR[i] > 0){
+    SAAPos = c(SAAPos, data$SAARFR[i])
+  } else {
+    SAANeg = c(SAANeg, data$SAARFR[i])
+  }
+}
+
+ks.test(PPDPos, CEOPos, alternative = "less")
+ks.test(SAAPos, CEOPos, alternative = "less")
+
+ks.test(CEONeg, SAANeg, alternative = "less")
+ks.test(PPDNeg, CEONeg, alternative = "less")
+
+t.test(CEOPos, PPDPos)
+t.test(PPDNeg, CEONeg)
