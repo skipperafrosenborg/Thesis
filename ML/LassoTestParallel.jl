@@ -1,12 +1,14 @@
-#LASSO
+#Code written by Skipper af Rosenborg and Esben Bager
 using StatsBase
 using DataFrames
 using CSV
 
+#Load training size
 trainingSizeInput = parse(Int64, ARGS[1])
 #trainingSizeInput = 12
 println(typeof(trainingSizeInput))
 
+#set path
 path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML/Lasso_Test"
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 cd(path)
@@ -15,21 +17,10 @@ include("SupportFunction.jl")
 include("DataLoad.jl")
 println("Leeeeroooy Jenkins")
 
-#Esben's path
-#cd("$(homedir())/Documents/GitHub/Thesis/Data")
-#path = "$(homedir())/Documents/GitHub/Thesis/Data"
-
-#=
-VIX = 1
-raw = 0
-expTrans = 1
-timeTrans = 1
-TA = 1
-trainingSize = 48
-=#
-
+#Function to run LASSO and output result files
 function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
-	#Skipper's path
+	#Set path and load data
+
 	#path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/Data/IndexDataDiff/"
 	path = "/zhome/9f/d/88706/SpecialeCode/Thesis/Data/IndexDataDiff/"
 
@@ -55,6 +46,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	dateAndReseccion = Array(mainData[:,end-1:end])
 	mainDataArr = Array(mainData[:,1:end-2])
 
+	#Extract names
 	colNames = names(mainData)
 	if VIX == 1
 		if timeTrans == 1
@@ -75,11 +67,8 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	nRows = size(mainDataArr)[1]
 	nCols = size(mainDataArr)[2]
 
+	#Pipeline data and include different transformations
 	fileName = path*"Results/IndexData/LassoTest/"*industry*"/"*string(trainingSize)*"-1/"*string(trainingSize)*"_"
-
-	#Reset HPC path
-	#path = "/zhome/9f/d/88706/SpecialeCode/Thesis/ML"
-	#cd(path)
 
 	mainYarr = mainDataArr[:, nCols:nCols]
 
@@ -126,6 +115,7 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 
 	println(fileName)
 
+	#Set gamma and initilise arrays
 	nGammas = 10
 	predictions = 1
 	testRuns = nRows-trainingSize-predictions
@@ -152,9 +142,10 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 	for i=1:nGammas
 		gammaInput = gammaArray[:,i]
 
-		#Loop over gamma
+		#Loop over gamma and solve LASSO in parallel
 		results = pmap(generatSolveAndProcess, xTrainInput, YtrainInput, XpredInput, YpredInput, gammaInput)
 		results
+		#Log results
 		for j in 1:testRuns
 			ISR[j,i] = results[j][1]
 			Indi[j,i] = results[j][2]
@@ -164,10 +155,12 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 		end
 	end
 
+	#Output bmatrix files
 	for i=1:nGammas
 		writedlm(fileName*"bMatrix"*string(trainingSizeInput)*"_"*string(i)*".csv",bSolMatrix[:,:,i],",")
 	end
 
+	#Output files
 	dateAndReseccionOutput = dateAndReseccion[trainingSize+1:trainingSize+testRuns,:]
 	toInput = Array{String}(1,2)
 	toInput[1,1] = "Date"
@@ -195,8 +188,8 @@ function runLassos(VIX, raw, expTrans, timeTrans, TA, trainingSize)
 end
 
 
-#@time(
-	#Testing raw dataset
+#Loops to process all dataset transformations
+#Testing raw dataset
 for timeTrans = 0:1
 	for expTrans = 0:1
 		for TA = 0:1
@@ -215,9 +208,6 @@ for VIX = 0:1
 		end
 	end
 end
-#)
-
-#runLassos(0, 1, 0, 0, 0, 12)
 
 #path = "/Users/SkipperAfRosenborg/Google Drive/DTU/10. Semester/Thesis/GitHubCode/Thesis/ML"
 #cd(path)

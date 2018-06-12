@@ -1,3 +1,4 @@
+#Code written by Skipper af Rosenborg and Esben Bager
 using StatsBase
 using DataFrames
 using CSV

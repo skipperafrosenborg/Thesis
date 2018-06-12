@@ -771,7 +771,6 @@ function AALR_Time_Run(standX, standY, standXVali, standYVali, trainingData, r)
     println("This was time for warmstart")
 
     #Heuristic warmstart
-    println("Fucking start here!")
     bestObjtivesHeuristic = @time(solveAndLogForAllKHeuristics(kmax, standXVali, standYVali, r))
     println("This was time for heuristc")
 
